@@ -1,0 +1,16 @@
+-- binary_seq_pair format (deprecated)
+
+## python command
+...
+[i]
+seq_x in binary format
+seq_y in binary format
+d(seq_x, seq_y)
+...
+
+-- binary_seq_pair format
+
+## python command
+...
+[seq_x in binary format]\t[seq_y in binary format]\td(seq_x, seq_y)
+...
