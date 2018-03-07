@@ -1,4 +1,4 @@
--- binary_seq_pair format (deprecated)
+[1] binary_seq_pair format (deprecated)
 
 ## python command
 ...
@@ -8,9 +8,25 @@ seq_y in binary format
 d(seq_x, seq_y)
 ...
 
--- binary_seq_pair format
+
+
+
+[2] binary_seq_pair format
 
 ## python command
 ...
 [seq_x in binary format]\t[seq_y in binary format]\td(seq_x, seq_y)
 ...
+
+
+
+
+[3] cluster_center_fa format
+
+>seq_id  gene=gene_id weight=wt
+seq in binary or ATCG
+
+Note:
+- for simulated data, seq_id==gene_id. in practice, one gene_id may contain several seq_id (e.g. isoforms).
+- weight is at relative value. when sample cluster center to obtain noisy samples, the number of samples of a particular cluster is proportional to this relative weight.
+
