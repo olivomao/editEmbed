@@ -1,4 +1,4 @@
-[1] binary_seq_pair format (deprecated)
+========[1] binary_seq_pair format (deprecated)
 
 ## python command
 ...
@@ -11,7 +11,7 @@ d(seq_x, seq_y)
 
 
 
-[2] binary_seq_pair format
+========[2] binary_seq_pair format
 
 ## python command
 ...
@@ -21,12 +21,34 @@ d(seq_x, seq_y)
 
 
 
-[3] cluster_center_fa format
+========[3] cluster_center_fa format
 
 >seq_id  gene=gene_id weight=wt
 seq in binary or ATCG
 
 Note:
 - for simulated data, seq_id==gene_id. in practice, one gene_id may contain several seq_id (e.g. isoforms).
-- weight is at relative value. when sample cluster center to obtain noisy samples, the number of samples of a particular cluster is proportional to this relative weight.
+- weight is normalized. this is useful when tot number of sampled seqs is fixed, and we sample seqs from clusters in a parallel way (to split clusters)
+
+========[4] sampled_seq_fa format
+
+>seq_id		tid=cluster_seq_id		gene=gene_id	weight=wt
+seq in binary or ATCG
+
+Note:
+- for simulated data, cluster_seq_id==gene_id. in practice, one gene_id may contain several cluster_seq_id (e.g. isoforms).
+- one cluster_seq_id may have several sampled (noisy) seq_id
+
+========[5] pairwise_distance format:
+
+- header:
+  #seq_id1	seq_id2		type	(distance1 e.g. edit distance)		[(distance2) etc]
+
+- ids are obtained from:
+  the seq_id in sampled_seq_fa format (known tid and gene)
+
+- type: 0: sampled_seqs have same tid (e.g. cluster)
+        1: different tid (different gene)
+        2: different tid (same gene) ==> to be addressed when dealing with real data
+
 

@@ -1,0 +1,13 @@
+2018.03.08
+
+indel_channel.py
+- support bin/dna seq
+- support calc num of sampled seq per cluster by tot_num*weigt or fixed copy_num
+
+simulate_data.py
+- weight normalized
+- sample from cluster using 1 thread or multiple threads
+
+util.py
+- add run_cmds
+- add split_fa_file and merge_files

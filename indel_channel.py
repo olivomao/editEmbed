@@ -9,6 +9,8 @@ import random
 from collections import namedtuple, defaultdict
 from Bio import SeqIO
 
+from util import *
+
 simType = ['sub', 'ins', 'del', 'match']
 simTypeSize = 4
 
@@ -79,6 +81,11 @@ def sim_seq_binary(seq, sub, dele, ins):
 
     profile = [sub, sub+ins, sub+ins+dele, 1.]
 
+    return sim_seq_binary_profile(seq, profile)
+    
+
+def sim_seq_binary_profile(seq, profile):
+
     nucl = set(['0', '1'])
     sim = ''
     for i, s in enumerate(seq):
@@ -102,6 +109,11 @@ def sim_seq_binary(seq, sub, dele, ins):
     return sim
 
 '''
+input: fasta_filename in cluster_center_fa format
+
+output: sampled sequences from cluster centers in sampled_seq_fa format
+>seq_id     tid=cluster_seq_id      gene=gene_id    weight=wt
+here, seq_id is [output_prefix]_[ith]
 
 '''
 if __name__ == "__main__":
@@ -110,11 +122,16 @@ if __name__ == "__main__":
     parser = ArgumentParser("Simple error simulation")
     parser.add_argument("fasta_filename")
     parser.add_argument("output_prefix")
-    parser.add_argument("--copy", type=int, default=1, help="Number of copies to simulate per input sequence (default: 1)")
+    parser.add_argument("--total_samples", type=int, default=-1, help="Total number of sampled sequences. Default: -1 "+\
+                          "sample per cluster by --copy; >0, sample per cluster by its relative weight")
+    parser.add_argument("--copy", type=int, default=1, help="Only used if --total_samples -1 "+\
+                          "; Number of copies to simulate per cluster (default: 1)")        
+    #parser.add_argument("--copy", type=int, default=1, help="Number of copies to simulate per input sequence (default: 1)")
     parser.add_argument("--ins", "-i", type=float, default=0, help="Insert error rate [0-1] (default: 0)")
     parser.add_argument("--dele", "-d", type=float, default=0, help="Deletion error rate [0-1] (default: 0)")
     parser.add_argument("--sub", "-s", type=float, default=0, help="Substitution error rate [0-1] (default: 0)")
-    parser.add_argument("--output", "-o", type=str, help="seq output")
+    parser.add_argument("--output", "-o", type=str, help="seq output, in sampled_seq_fa format")
+    parser.add_argument("--type", type=int, default=0, help="type of seq. 0 is binary; 1 is dna e.g. ATCG")
 
     args = parser.parse_args()
 
@@ -139,15 +156,37 @@ if __name__ == "__main__":
     fasta_filename = args.fasta_filename
     idpre = args.output_prefix
 
+    seq_tp = args.type
+
     fo = open(args.output, 'w')
 
     ith = 0
     for r in SeqIO.parse(open(fasta_filename), 'fasta'):
-        for j in xrange(args.copy):
+        if args.total_samples==-1:
+            n_copy = args.copy 
+        else:
+            #pdb.set_trace()
+            n_copy = int(args.total_samples * float(r.description.strip().split()[-1][7:]))
+            if n_copy==0:
+                pdb.set_trace()
+                print("%s has n_copy 0"%r.description)
+                continue
+
+        for j in xrange(n_copy): #xrange(args.copy):
             ith += 1
+            #pdb.set_trace()
             #print(">{0}_{1}_{2}\n{3}".format(idpre, ith, r.id[:r.id.find('|')], sim_seq(r.seq.tostring(), profile)))
             #pdb.set_trace()
             #print(">{0}_{1} {2}\n{3}".format(idpre, ith, r.description, sim_seq(r.seq.tostring(), profile)))
-            fo.write(">{0}_{1} {2}\n{3}\n".format(idpre, ith, r.description, sim_seq(r.seq.tostring(), profile)))
+            if seq_tp == 0:
+                seq = sim_seq_binary_profile(str(r.seq), profile)
+            else:
+                seq = sim_seq(str(r.seq), profile)
+
+            #pdb.set_trace()
+
+            fo.write(">{0}_{1}\t{2}\n{3}\n".format(idpre, ith, "tid="+r.description, seq))
 
     fo.close()
+
+    logPrint("[indel_channel] %s written"%args.output)  
