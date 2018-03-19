@@ -1,3 +1,29 @@
+TBD: embedding_cgk.py #load, MAXLEN, transform deprecated
+
+2018.03.19
+
+summary:
+- improve whole framework: consistent pipeline; support nn prediction and downstream analysis (histogram and roc); use seq2nn to handle data transform for both train and inference etc
+
+train.py
+- add prepare data (not using tf.FLAGS)
+- better console interface
+
+simulate_data.py
+- pairwise dist file supports multiple dist types (e.g. calc_non_learned_dist)
+- calc_dist_1thread: use seq2nn; pt to set max_num_dist_1thread for quick verification of code flow
+- calc_dist_Nthread: related changes based on calc_dist_1thread
+
+proc_data.py
+- disable transform (e.g. global variables usage)
+
+inference.py
+- maxlen and blocklen no longer global variables; to be saved into model and restored later
+- add Predict, seq2nn for prediction based on trained model
+- add Fa_tseq class for prediction based on trained model
+- load: apply seq2nn
+- load2: use args and seq2nn
+
 2018.03.08
 
 indel_channel.py

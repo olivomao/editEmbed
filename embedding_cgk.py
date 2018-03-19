@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     fig_path = dir + '/fig_cgk.0.2.png'
 
-    x1, x2, y, x1_str, x2_str = load(eval_file)
+    x1, x2, y, x1_str, x2_str = load(eval_file) #deprecated
 
     diff_list = []
 

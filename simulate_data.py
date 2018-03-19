@@ -12,6 +12,7 @@ from Bio import SeqIO
 
 from util import *
 from edit_dist import *
+from inference import Predict, seq2nn
 
 def random_dna_string(length):
     letters ="ATCG"
@@ -206,6 +207,25 @@ def proj_hamming_dist(a, b):
     return min_dist
 
 '''
+calc dist w/ loading learned model
+'''
+def calc_non_learned_dist(distance_type,
+                          seq1_str,
+                          seq2_str):
+    if distance_type==0:
+        ed = edit_dist(seq1_str, seq2_str) #seq type independent
+    elif distance_type==1:
+        pdb.set_trace()
+        ed = gapped_edit_dist(seq1_str, seq2_str) #seq type independent
+    elif distance_type==2:
+        if seq_type==0:
+            pdb.set_trace() #ed = proj_hamming_dist_binary(seq1_str, seq2_str)
+        else: # DNA/ATCG seq
+            pdb.set_trace()
+            ed = proj_hamming_dist(seq1_str, seq2_str) #seq type dependent
+    return ed
+
+'''
 single-thread
 
 calc pairwise dist b/w seqs in fa_1 and seqs in fa_2
@@ -228,10 +248,24 @@ not consider:
 '''
 distance_type_names = ['edit_dist', 'gapped_edit_dist', 'proj_hamming_dist', 'nn_distance']
 
-def calc_dist_1thread(distance_type, seq_type, fa_1, fa_2, dist_out, addheader=0):
+'''
+model_prefix: to be used when distance_type==3
+              incorporated into: nn_dist_args.model_prefix         #model prefix ...ckpt to be loaded
+'''
+def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addheader=0,
+                      model_prefix='NA', max_num_dist_1thread=-1):
 
-    seqs1 = list(SeqIO.parse(fa_1, 'fasta')); print('%d seqs loaded'%len(seqs1)); N_seqs1 = len(seqs1)
-    seqs2 = list(SeqIO.parse(fa_2, 'fasta')); print('%d seqs loaded'%len(seqs2)); N_seqs2 = len(seqs2)
+    if 3 in distance_type_list:
+        pdt = Predict(seq_type, model_prefix)
+        #print('pdt seq type '+ str(seq_type))
+        s2n_obj = seq2nn(pdt.seq_type, pdt.maxlen, pdt.blocklen)
+        #s2n_obj = seq2nn(seq_type, 500, 10)
+        seqs1 = s2n_obj.transform_seqs_from_fa(fa_1); N_seqs1 = len(seqs1)
+        seqs2 = s2n_obj.transform_seqs_from_fa(fa_2); N_seqs2 = len(seqs2)
+        #pdt = Predict(seq_type, model_prefix)
+    else: 
+        seqs1 = list(SeqIO.parse(fa_1, 'fasta')); print('%d seqs loaded'%len(seqs1)); N_seqs1 = len(seqs1)
+        seqs2 = list(SeqIO.parse(fa_2, 'fasta')); print('%d seqs loaded'%len(seqs2)); N_seqs2 = len(seqs2)
 
     if fa_1==fa_2:
         N_tot = (N_seqs1-1)*N_seqs1/2;
@@ -242,9 +276,14 @@ def calc_dist_1thread(distance_type, seq_type, fa_1, fa_2, dist_out, addheader=0
 
     if addheader==1:
         #pdb.set_trace()
-        fo.write('#seq_id1\tseq_id2\ttype\t%s\n'%distance_type_names[distance_type])  
+        headerline = '#seq_id1\tseq_id2\ttype\t' #%distance_type_names[distance_type]
+        for distance_type in distance_type_list:
+            headerline += '%s\t'%distance_type_names[distance_type]
+        fo.write('%s\n'%headerline)
 
     iterCnt = iterCounter(N_tot, "calc_dist_1thread") #: %s and %s\n"%(fa_1, fa_2))
+
+    cnt = 0
 
     for seq1_idx in range(N_seqs1):
         
@@ -281,25 +320,36 @@ def calc_dist_1thread(distance_type, seq_type, fa_1, fa_2, dist_out, addheader=0
             seq2_str = str(seq2.seq)
             if seq1_str=='' or seq2_str=='': continue
 
-            if distance_type==0:
-                ed = edit_dist(seq1_str, seq2_str) #seq type independent
-            elif distance_type==1:
-                pdb.set_trace()
-                ed = gapped_edit_dist(seq1_str, seq2_str) #seq type independent
-            elif distance_type==2:
-                if seq_type==0:
-                    pdb.set_trace() #ed = proj_hamming_dist_binary(seq1_str, seq2_str)
-                else: # DNA/ATCG seq
-                    pdb.set_trace()
-                    ed = proj_hamming_dist(seq1_str, seq2_str) #seq type dependent
-            elif distance_type==3:
-                pdb.set_trace() #TBD
+            cnt+=1
+            if max_num_dist_1thread != -1 and cnt>max_num_dist_1thread:
+                break
 
-            #check type
+            distance_list = []
+            #pdb.set_trace()
+            for distance_type in distance_type_list:
+                if distance_type!=3:
+                    ed = calc_non_learned_dist(distance_type, seq1_str, seq2_str)
+                elif distance_type==3:
+                    #pdb.set_trace()
+                    tseq1 = seqs1[seq1_idx].tseq
+                    tseq2 = seqs2[seq2_idx].tseq
+                    ed = pdt.predict0(tseq1, tseq2)
+                distance_list.append(ed)
+
+            #check pair of (x1,x2) type
             tp = check_type([seq1_trid, seq1_gene_id], [seq2_trid, seq2_gene_id])
 
-            fo.write('%s\t%s\t%s\t%f\n'%(seq1_id, seq2_id, tp, ed)) #pairwise_distance format
-            #fo.write('%s (tid=%s)\t%s (tid=%s)\t%s\t%f\n'%(seq1_id, seq1_trid, seq2_id, seq2_trid, tp, ed)) #debug purpose
+            line_content = '%s\t%s\t%s\t'%(seq1_id, seq2_id, tp)
+            #pdb.set_trace()
+            for ed in distance_list:
+                line_content += '%f\t'%ed
+
+            fo.write('%s\n'%line_content) #pairwise_distance format
+
+        #for seq2_idx
+        if max_num_dist_1thread != -1 and cnt>max_num_dist_1thread:
+                break
+    #for seq1_idx
 
     iterCnt.finish()
 
@@ -312,14 +362,16 @@ def calc_dist_1thread(distance_type, seq_type, fa_1, fa_2, dist_out, addheader=0
 
 '''
 multi-thread
+
+- model_prefix: only used when distance_type_list contains nn_dist
 '''
-def calc_dist_Nthread(distance_type, seq_type, seq_fa, dist_out, thread, addheader, clear_intermediate):
+def calc_dist_Nthread(distance_type_list_str, seq_type, seq_fa, dist_out, thread, addheader, clear_intermediate, model_prefix='NA', max_num_dist_1thread=-1 ):
 
     sub_fld = {0:'edit', 1:'gapped_edit', 2:'proj_hamming', 3:'nn_distance'}
 
     fld, fn = os.path.split(dist_out)
-    tmp_fld_split = '%s/split_samples_[%s]/'%(fld, sub_fld[distance_type]); run_cmd('mkdir -p %s'%tmp_fld_split)
-    tmp_fld_dist  = '%s/split_dist_[%s]/'%(fld, sub_fld[distance_type]); run_cmd('mkdir -p %s'%tmp_fld_dist)
+    tmp_fld_split = '%s/split_samples/'%(fld); run_cmd('mkdir -p %s'%tmp_fld_split)
+    tmp_fld_dist  = '%s/split_dist/'%(fld); run_cmd('mkdir -p %s'%tmp_fld_dist)
 
     num_seq = int(os.popen('grep \'>\' %s | wc -l'%(seq_fa)).read().split()[0])
     num_seq_per_split = max(int(num_seq/np.sqrt(2*thread)), 1)
@@ -351,24 +403,45 @@ def calc_dist_Nthread(distance_type, seq_type, seq_fa, dist_out, thread, addhead
             dist_f1_f2 = tmp_fld_dist + '/' + 'i_%05d_j_%05d.dist'%(i,j)
             #pdb.set_trace()
             cmd = 'python simulate_data.py calc_dist_1thread '+\
-                  '--distance_type %d --seq_type %d --seq_fa1 %s --seq_fa2 %s --dist_out %s --addheader %d'%\
-                  (distance_type, seq_type, split_f1, split_f2, dist_f1_f2, 0)
+                  '--distance_type_list %s --seq_type %d --seq_fa1 %s --seq_fa2 %s --dist_out %s --addheader %d --model_prefix %s --max_num_dist_1thread %d'%\
+                  (distance_type_list_str, seq_type, split_f1, split_f2, dist_f1_f2, 0, model_prefix, max_num_dist_1thread)
             cmds.append(cmd)
     #pdb.set_trace()
     run_cmds(cmds, thread)
 
-    if addheader==0:
-        headerline = ''
-    else:
-        headerline = '#seq_id1\tseq_id2\ttype\t%s\n'%distance_type_names[distance_type]
-    merge_files(tmp_fld_dist, dist_out, dele=False, headerline=headerline)
+    #if addheader==0:
+    #    headerline = ''
+    #else:
+    #    headerline = '#seq_id1\tseq_id2\ttype\t%s\n'%distance_type_names[distance_type]
+    merge_files(tmp_fld_dist, dist_out, dele=False, headerline='')
 
     cmd = 'sort -k1,1 -k2,2 %s > %s.tmp'%(dist_out, dist_out)
     run_cmd(cmd)
 
-    cmd = 'mv %s.tmp %s'%(dist_out, dist_out)
+    cmd = 'rm %s'%dist_out
     run_cmd(cmd)
 
+    if addheader==0:
+        pdb.set_trace()
+        cmd = 'mv %s.tmp %s'%(dist_out, dist_out)
+        run_cmd(cmd)
+    else:
+        #pdb.set_trace()
+
+        with open('%s.tmp2'%dist_out, 'w') as fo_header:
+            #pdb.set_trace()
+            headerline = '#seq_id1\tseq_id2\ttype\t' #%distance_type_names[distance_type]
+            for distance_type in distance_type_list_str.split(','):
+                distance_type = int(distance_type)
+                headerline += '%s\t'%distance_type_names[distance_type]
+            fo_header.write('%s\n'%headerline)
+
+        cmd = 'cat %s.tmp2 %s.tmp > %s'%(dist_out, dist_out, dist_out)
+        run_cmd(cmd)
+
+        cmd = 'rm %s.tmp %s.tmp2'%(dist_out, dist_out)
+        run_cmd(cmd)
+    
     if clear_intermediate==1:
         run_cmd('rm -r %s'%tmp_fld_split)
         run_cmd('rm -r %s'%tmp_fld_dist)
@@ -411,23 +484,29 @@ usage:
 
     (3.1) 1-thread case:
 
-    python simulate_data.py calc_dist_1thread  --distance_type dt           #distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)
+    python simulate_data.py calc_dist_1thread  --distance_type_list  dt0[,dt1,..]           #distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)
                                                --seq_type      st           #type of seq. 0: binary seq; 1: dna/atcg seq
                                                --seq_fa1       f1          
                                                --seq_fa2       f2
                                                --dist_out      do           #Output file of pairwise distance (e.g. pairwise_distance_format)
                                                [--addheader    ah]          #Add headerline (1) or not (0, default) to the output
+                                               [--model_prefix mp/NA]          #needed if nn_distance to be estimated; otherwise NA (default)
+                                               [--max_num_dist_1thread -1]  #max number of pairwise dist to calculate; default -1; used for test purpose
 
 
     (3.2) N-thread case:
 
-    python simulate_data.py calc_dist --distance_type       dt              #distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)
+    python simulate_data.py calc_dist --distance_type_list       dt0[,dt1,..]              #distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)
                                       --seq_type            st              #type of seq. 0: binary seq; 1: dna/atcg seq
                                       --seq_fa              f               #Input seqs in sampled_seq_fa format
                                       --dist_out            do
                                       --thread              num_thread
                                       [--addheader          ah/0]
                                       [--clear_intermediate ci/0]
+                                      [--model_prefix       mp/NA]
+                                      [--max_num_dist_1thread -1]  #max number of pairwise dist to calculat
+e; default -1; used for test purpose
+
 '''
 if __name__ == "__main__":
 
@@ -476,52 +555,68 @@ if __name__ == "__main__":
 
         s_parser = subs.add_parser('calc_dist')
 
-        s_parser.add_argument("--distance_type", type=int, default=0, help="distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
+        #s_parser.add_argument("--distance_type", type=int, default=0, help="distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
+        s_parser.add_argument("--distance_type_list", type=str, help="list of distance_types. e.g. 0,3. distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
         s_parser.add_argument("--seq_type", type=int, help="type of seq. 0: binary seq; 1: dna/atcg seq")
         s_parser.add_argument("--seq_fa", help="Input seqs in sampled_seq_fa format")
         s_parser.add_argument("--dist_out", help="Output file of pairwise distance (e.g. pairwise_distance_format)")
         s_parser.add_argument("--thread", type=int, default=1, help="number of processes")
         s_parser.add_argument("--addheader", type=int, default=0, help="Add headerline (1) or not (0, default) to the output file of pairwise distance (e.g. pairwise_distance_format)")
         s_parser.add_argument("--clear_intermediate", type=int, default=0, help="clear intermediate files (1) or not (0)")
+        s_parser.add_argument("--model_prefix", default="NA", type=str, help="model prefix to be used if nn_distance needs to be estimated. Default is NA")
+        s_parser.add_argument("--max_num_dist_1thread", default=-1, type=int, help="max number of pairwise dist to calculate; default -1; used for test purpose")
 
         args = parser.parse_args()
 
         if args.thread==1:
-            calc_dist_1thread(args.distance_type, 
+            pdb.set_trace()
+            distance_type_list = [int(dt) for dt in args.distance_type_list.split(',') if dt!='']
+            calc_dist_1thread(distance_type_list, 
                               args.seq_type,
                               args.seq_fa,
                               args.seq_fa,
                               args.dist_out,
-                              addheader=args.addheader)
+                              addheader=args.addheader,
+                              model_prefix=args.model_prefix,
+                              max_num_dist_1thread=args.max_num_dist_1thread)
         else:
             #pdb.set_trace()
-            calc_dist_Nthread(args.distance_type,
+            calc_dist_Nthread(args.distance_type_list,
                               args.seq_type,
                               args.seq_fa,
                               args.dist_out,
                               args.thread,
                               args.addheader,
-                              args.clear_intermediate)
+                              args.clear_intermediate,
+                              args.model_prefix,
+                              args.max_num_dist_1thread)
 
     elif sys.argv[1]=='calc_dist_1thread': #to be used by calc_dist_Nthread
 
         s_parser = subs.add_parser('calc_dist_1thread')
 
-        s_parser.add_argument("--distance_type", type=int, help="distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
-        s_parser.add_argument("--seq_type", help="type of seq. 0: binary seq; 1: dna/atcg seq")
-        s_parser.add_argument("--seq_fa1", help="First input seqs in sampled_seq_fa format")
-        s_parser.add_argument("--seq_fa2", help="Second input seqs in sampled_seq_fa format. only consider non-dup (s1,s2)")
-        s_parser.add_argument("--dist_out", help="Output file of pairwise distance (e.g. pairwise_distance_format)")
+        #s_parser.add_argument("--distance_type", type=int, help="distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
+        s_parser.add_argument("--distance_type_list", type=str, help="list of distance_types. e.g. 0,3. distance_type: 0.edit 1.gapped_edit 2.proj_hamming 3.nn_distance (deep learning based)")
+        s_parser.add_argument("--seq_type", type=int, help="type of seq. 0: binary seq; 1: dna/atcg seq")
+        s_parser.add_argument("--seq_fa1", type=str, help="First input seqs in sampled_seq_fa format")
+        s_parser.add_argument("--seq_fa2", type=str, help="Second input seqs in sampled_seq_fa format. only consider non-dup (s1,s2)")
+        s_parser.add_argument("--dist_out", type=str, help="Output file of pairwise distance (e.g. pairwise_distance_format)")
         s_parser.add_argument("--addheader", type=int, default=0, help="Add headerline (1) or not (0, default) to the output file of pairwise distance (e.g. pairwise_distance_format)")
-
+        s_parser.add_argument("--model_prefix", default="NA", type=str, help="model prefix to be used if nn_distance needs to be estimated. Default is NA")
+        s_parser.add_argument("--max_num_dist_1thread", default=-1, type=int, help="max number of pairwise dist to calculate; default -1; used for test purpose")
         args = parser.parse_args()
 
-        calc_dist_1thread(args.distance_type, 
+        #pdb.set_trace()
+        distance_type_list = [int(dt) for dt in args.distance_type_list.split(',') if dt!='']
+        calc_dist_1thread(distance_type_list, 
                           args.seq_type,
                           args.seq_fa1,
                           args.seq_fa2,
                           args.dist_out,
-                          addheader=args.addheader)
+                          addheader=args.addheader,
+                          model_prefix=args.model_prefix,
+                          max_num_dist_1thread=args.max_num_dist_1thread)
+    
     else:
 
         pdb.set_trace()
