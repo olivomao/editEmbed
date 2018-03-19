@@ -4,11 +4,11 @@ alias ENDCOMMENT="fi"
 Python=/usr/bin/python #TensorFlow supported
 
 #I/O
-#dir=data_sim_data_type_bin
-dir=data_sim_data_type_dna
+dir=data_sim_data_type_dna/train/
+mkdir -p $dir 
+
 cluster_fa=$dir/cluster.fa
 #clusters
-#seq_tp=0
 seq_tp=1
 cluster_len=150
 weight_dist=0
@@ -27,17 +27,17 @@ python simulate_data.py gen_cluster_center \
 ENDCOMMENT
 
 #I/O
-sample_fa=$dir/sample.fa
+sample_fa=$dir/sample_train_rate_001_to_003.fa
 #sample config
-sample_prefix=sp
+sample_prefix=sp_tr_r003
 n_tot_samples=-1 #if >0 then each cluster has n_tot_samples*weight seqs to be sampled
 n_copy=10
 #channel config
-rate_ins=0.01
-rate_del=0.01
-rate_sub=0.01
+rate_ins=0.03
+rate_del=0.03
+rate_sub=0.03
 #parallel config
-n_threads=1
+n_threads=40
 clear_split=1 #only used for multi-threads
 
 #[2] Sample noisy seqs
@@ -59,24 +59,24 @@ ENDCOMMENT
 
 #[3] Calc distance -- multiple threads
 
-BEGINCOMMENT
+#BEGINCOMMENT
 #load model for eval
-dist_tp_list=0,3 #0:edit 3:nn_dist
-sample_dist=$dir/sample_edit_nn_thread40_max-1_dna.dist
+dist_tp_list=0 #0:edit 3:nn_dist
+sample_dist=$dir/sample_train_rate_001_to_003.dist
 add_hd=1
 clear_interm=1
-model_prfx=$dir/model_ksreeram_server/ckpt
+model_prfx=$dir/model/ckpt #model_ksreeram_server/ckpt
 max_num_dist_1thread=-1
-ENDCOMMENT
+#ENDCOMMENT
 
-#BEGINCOMMENT
+BEGINCOMMENT
 dist_tp_list=3
 sample_dist=$dir/sample_edit_thread20_max-1.dist
 add_hd=1
 clear_interm=1
 model_prfx=$dir/model/ckpt
 max_num_dist_1thread=10
-#ENDCOMMENT
+ENDCOMMENT
 
 BEGINCOMMENT
 python simulate_data.py calc_dist \

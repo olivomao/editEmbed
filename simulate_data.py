@@ -422,7 +422,7 @@ def calc_dist_Nthread(distance_type_list_str, seq_type, seq_fa, dist_out, thread
     run_cmd(cmd)
 
     if addheader==0:
-        pdb.set_trace()
+        #pdb.set_trace()
         cmd = 'mv %s.tmp %s'%(dist_out, dist_out)
         run_cmd(cmd)
     else:
@@ -569,7 +569,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         if args.thread==1:
-            pdb.set_trace()
+            #pdb.set_trace()
             distance_type_list = [int(dt) for dt in args.distance_type_list.split(',') if dt!='']
             calc_dist_1thread(distance_type_list, 
                               args.seq_type,
