@@ -66,7 +66,8 @@ dist_tp_list=0,3 #0:edit 3:nn_dist
 sample_dist=$dir/sample_rate_001_to_003.dist
 add_hd=1
 clear_interm=1
-model_prfx=$train_dir/model/ckpt #model_ksreeram_server/ckpt
+#model_prfx=$train_dir/model/ckpt #model_ksreeram_server/ckpt
+model_prfx=$train_dir/model_addEmbedOut/ckpt
 max_num_dist_1thread=-1
 #ENDCOMMENT
 
@@ -82,6 +83,8 @@ python simulate_data.py calc_dist \
                         --model_prefix         $model_prfx \
                         --max_num_dist_1thread $max_num_dist_1thread
 ENDCOMMENT
+
+#[4] downstream evaluation -- draw histogram or roc
 
 BEGINCOMMENT
 
@@ -106,5 +109,17 @@ python evaluation.py draw_roc \
 
 ENDCOMMENT
          
-                   
+#[5] clustering related -- export embedding
+
+#BEGINCOMMENT
+
+input_fa=$dir/sample_rate_001.fa
+embed_output=$dir/sample_rate_001.embed.fa
+
+python evaluation.py export_embedding \
+                     --seq_type $seq_tp \
+                     --input_fa $input_fa \
+                     --embed_output $embed_output \
+                     --model_prefix $model_prfx
+#ENDCOMMENT         
 

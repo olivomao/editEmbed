@@ -8,6 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from util import logPrint, iterCounter
+from inference import Predict, seq2nn
 
 
 '''
@@ -210,6 +211,52 @@ def draw_roc(args):
     return
 
 '''
+Description:
+      Based on the learned model, transfer a fasta file into an embedding one
+
+input:
+      seq_type     #0: binary  1: dna
+      intput_fa    #e.g. sampled_seq_fa file
+      model_prefix #learned model
+output:
+      embed_fa file
+'''
+def export_embedding(args):
+
+    logPrint('[export_embedding] starts')
+
+    pdt = Predict(args.seq_type, args.model_prefix)
+
+    s2n_obj = seq2nn(pdt.seq_type, pdt.maxlen, pdt.blocklen)
+    
+    seqs = s2n_obj.transform_seqs_from_fa(args.input_fa); N_seqs = len(seqs)
+
+    #pdb.set_trace()
+
+    with open(args.embed_output, 'w') as fout:
+
+        iterCnt = iterCounter(N_seqs, 'export_embedding')
+
+        for seq in seqs:
+
+            iterCnt.inc()
+
+            seq_embed = pdt.get_embed(seq.tseq)
+            seq_embed = seq_embed.flatten()
+            #embed_str = np.array2string(seq_embed.flatten(), separator=',')
+            embed_str = ','.join(str(v) for v in seq_embed)
+
+            fout.write('>%s\n%s\n'%(seq.description, embed_str))
+
+        iterCnt.finish()
+
+    #pdb.set_trace()
+
+    logPrint('[export_embedding] finished. %s written.'%args.embed_output)
+
+    return
+
+'''
 downstream evaluation (histogram and roc) based on:
 - pairwise_dist_file
 '''
@@ -245,6 +292,19 @@ if __name__ == "__main__":
         args = parser.parse_args()
         draw_roc(args)
         #pdb.set_trace()
+
+    elif sys.argv[1]=="export_embedding":
+        s_parser = subs.add_parser("export_embedding")
+        s_parser.add_argument("--seq_type", type=int, help="type of seq. 0: binary seq; 1: dna/atcg seq")
+        s_parser.add_argument("--input_fa", type=str, help="input seqs in fasta format")
+        s_parser.add_argument("--embed_output", type=str, help="Output file of embed_fa_format")
+        s_parser.add_argument("--model_prefix", type=str, help="learned model prefix")
+        args = parser.parse_args()
+
+        export_embedding(args)
+
+        #pdb.set_trace()
+
 
     else:
         pdb.set_trace()

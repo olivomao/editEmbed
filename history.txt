@@ -1,6 +1,23 @@
 # tag TBD indicates things to be improved in the codes
 # for example, embedding_cgk.py #load, MAXLEN, transform deprecated
 
+2018.03.21
+
+summary: support export_embed. e.g. x==>f(x)
+
+evaluation.py
+- add export_embedding
+
+file_structure.txt
+- add embed_fa
+
+inference.py
+- siamese: name output1 and output2 so that embedding can be extracted
+- Predict: add get_embed method
+
+test_sim_data_eval.sh
+- add export_embedding related script
+
 
 2018.03.21
 

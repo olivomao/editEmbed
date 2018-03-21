@@ -82,11 +82,13 @@ class siamese:
         with tf.variable_scope("BiRNN") as scope:
 
             self.out1 = self.BiRNN(self.embedded_x1, self.dropout, FLAGS)
+            self.out1 = tf.identity(self.out1, name="out1")
 
             scope.reuse_variables()
             #pdb.set_trace()
 
             self.out2 = self.BiRNN(self.embedded_x2, self.dropout, FLAGS)
+            self.out2 = tf.identity(self.out2, name="out2")
 
         #distance
         with tf.name_scope("distance"):
@@ -156,6 +158,14 @@ class Predict:
                                                                    })
         return predicted_dist[0]
 
+    def get_embed(self, transformed_seq):
+
+        seq_embedding = self.sess.run(self.embed, feed_dict={self.input_x1: transformed_seq,
+                                                             self.dropout: 1.0})
+        #pdb.set_trace()
+
+        return seq_embedding
+
     '''
     load a pretrained model (model_prefix)
     '''
@@ -181,6 +191,8 @@ class Predict:
             # Tensors we want to evaluate
             self.distance = self.graph.get_operation_by_name("distance/distance").outputs[0]
 
+            #pdb.set_trace()
+            self.embed = self.graph.get_operation_by_name("BiRNN/out1").outputs[0]
             #pdb.set_trace()
 
 

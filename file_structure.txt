@@ -51,4 +51,14 @@ Note:
         1: different tid (different gene)
         2: different tid (same gene) ==> to be addressed when dealing with real data
 
+========[6] embed_fa format
 
+similar as fasta, just replace the seq with its embedding. e.g.
+
+>seq [description]
+ATCG
+
+==>
+
+>seq [description]
+v1[,v2,...]
