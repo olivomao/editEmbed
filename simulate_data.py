@@ -161,15 +161,17 @@ def check_type(tid_gid_1, tid_gid_2):
 
     return tp
 
-Base2Index = {'A':0, 'C':1, 'T':2, 'G':3}
-def cgk_embedding(s, N):
+Base2Index_DNA = {'A':0, 'C':1, 'T':2, 'G':3}
+Base2Index_Bin = {'0':0, '1':1}
+def cgk_embedding(s, N, R, seq_type=0):
 
     #pdb.set_trace()
 
-    s = s.upper()
+    if seq_type==1:
+        s = s.upper()
 
-    L_R = 3*N*4
-    R = np.random.randint(0,2,L_R)
+    #L_R = 3*N*4
+    #R = np.random.randint(0,2,L_R)
     
     i = 0
     s1 = ""
@@ -177,7 +179,10 @@ def cgk_embedding(s, N):
         if i<len(s):
             c = s[i]
             s1 = s1 + c
-            i = i + R[(j-1)*4+Base2Index[c]]
+            if seq_type==0:
+                i = i + R[(j-1)*2+Base2Index_Bin[c]]
+            else:
+                i = i + R[(j-1)*4+Base2Index_DNA[c]]
         else:
             s1 = s1 + "N"
     return s1
@@ -189,14 +194,21 @@ def hamming(a,b):
 proj a --> a1, and b --> b1
 to use ham(a1, b1) to bound edit(a,b)
 '''
-def proj_hamming_dist(a, b):
+def proj_hamming_dist(a, b, seq_type):
     #pdb.set_trace()
     N_iter = 10
     N = max(len(a), len(b))
     min_dist = 3*N+1
-    for i in range(N_iter):        
-        a1 = cgk_embedding(a, N)
-        b1 = cgk_embedding(b, N)
+    for i in range(N_iter):
+
+        if seq_type==0:
+            L_R = 3*N*2
+        else:
+            L_R = 3*N*4
+        R = np.random.randint(0,2,L_R)
+
+        a1 = cgk_embedding(a, N, R, seq_type)
+        b1 = cgk_embedding(b, N, R, seq_type)
         h_a1_b1 = hamming(a1, b1)#a1,b1 of 3N lengths
         #print(h_a1_b1)
         if h_a1_b1<min_dist:
@@ -208,21 +220,26 @@ def proj_hamming_dist(a, b):
 
 '''
 calc dist w/o loading learned model
+
+dist is decided by distance_type
+- 0: edit dist
+- 1: gapped_edit dist
+- 2: proj_hamming dist
+- 3: nn_distance (deep learning based)
+
+seq_type: 0 binary 1 dna
 '''
 def calc_non_learned_dist(distance_type,
                           seq1_str,
-                          seq2_str):
+                          seq2_str,
+                          seq_type):
     if distance_type==0:
         ed = edit_dist(seq1_str, seq2_str) #seq type independent
     elif distance_type==1:
         pdb.set_trace()
         ed = gapped_edit_dist(seq1_str, seq2_str) #seq type independent
     elif distance_type==2:
-        if seq_type==0:
-            pdb.set_trace() #ed = proj_hamming_dist_binary(seq1_str, seq2_str)
-        else: # DNA/ATCG seq
-            pdb.set_trace()
-            ed = proj_hamming_dist(seq1_str, seq2_str) #seq type dependent
+        ed = proj_hamming_dist(seq1_str, seq2_str, seq_type) #seq type dependent
     return ed
 
 '''
@@ -331,7 +348,7 @@ def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addhea
             #pdb.set_trace()
             for distance_type in distance_type_list:
                 if distance_type!=3:
-                    ed = calc_non_learned_dist(distance_type, seq1_str, seq2_str)
+                    ed = calc_non_learned_dist(distance_type, seq1_str, seq2_str, seq_type)
                 elif distance_type==3:
                     #pdb.set_trace()
                     tseq1 = seqs1[seq1_idx].tseq
