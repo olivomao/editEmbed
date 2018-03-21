@@ -5,10 +5,14 @@ import sys
 import numpy as np
 from Bio import SeqIO
 
-#from global_vals import *
-#from proc_data import *
 from edit_dist import edit_dist
 
+'''
+a Siamese RNN for train and inference
+- input (x,y)
+- output dist(f(x), f(y))
+         TBD: also possible to output f(x) and f(y) as predictions/ representations
+'''
 class siamese:
 
     '''
@@ -45,6 +49,8 @@ class siamese:
 
     '''
     FLAGS contains parameters
+
+    - previously global variables maxlen and blocklen are stored in the model
     '''
     def __init__(self, FLAGS):
 
@@ -97,18 +103,11 @@ class siamese:
         return
 
 '''
-===== FLAGS:
-- FLAGS.seq_type #0: binary 1: DNA/ATCG
-
-- FLAGS.model_prefix #e.g. model_dir/ckpt
-
-- FLAGS.allow_soft_placement
-- FLAGS.log_device_placement
-
 ===== members:
 - self.seq_type #0: binary 1: ATCG
 - self.model_prefix #e.g. model_dir/ckpt
-- self.allow_soft_placement
+
+- self.allow_soft_placement   #device purposes
 - self.log_device_placement
 
 - self.sess
@@ -119,6 +118,9 @@ class siamese:
 - self.dropout
 
 - self.distance
+
+- self.maxlen
+- self.blocklen
 
 ===== note:
 class used to make predictions based on trained model:
@@ -144,26 +146,8 @@ class Predict:
         return sess
 
     '''
-    seq_type: 1 - DNA/ATCG seq
-    '''
-    def predict(self, seq_1, seq_2):
-
-        if self.seq_type==1:
-            seq_1 = "".join([dna2bin[seq_1[i]] for i in range(len(seq_1))])
-            seq_2 = "".join([dna2bin[seq_2[i]] for i in range(len(seq_2))])
-
-        seq_1 = np.asarray(transform(seq_1)); seq_1 = np.reshape(seq_1, (1,len(seq_1)));
-        seq_2 = np.asarray(transform(seq_2)); seq_2 = np.reshape(seq_2, (1,len(seq_2)));
-
-        predicted_dist = self.sess.run([self.distance], feed_dict={ self.input_x1: seq_1,
-                                                               self.input_x2: seq_2,
-                                                               self.dropout:  1.0
-                                                             })
-        #pdb.set_trace() 
-        return predicted_dist[0]
-
-    '''
-    transformed_seq_1 and transformed_seq_2 are not strs but transformed by seq2nn for model's direct usage
+    transformed_seq_1 and transformed_seq_2 are not strs,
+    but transformed by seq2nn into **list of ints**, for model's direct usage
     '''
     def predict0(self, transformed_seq_1, transformed_seq_2):
         predicted_dist =  self.sess.run(self.distance, feed_dict={ self.input_x1: transformed_seq_1,
@@ -172,6 +156,9 @@ class Predict:
                                                                    })
         return predicted_dist[0]
 
+    '''
+    load a pretrained model (model_prefix)
+    '''
     def __init__(self, seq_type,
                        model_prefix,
                        allow_soft_placement=True,
@@ -237,7 +224,7 @@ def test_Predict(args):
     return
 
 '''
-This is a class to transfer seq into nn input
+This is a class to transfer seq into nn input (e.g. list of ints)
 - to be used by both training and prediction
 '''
 class seq2nn:
@@ -251,6 +238,7 @@ class seq2nn:
 
     '''
     input: st
+           - st should be a binary seq
     output: [b_0, ..., b_BLOCKS-1] each is substring of st (zero padded and chopped into BLOCKLEN)
     '''
     def transform_binary(self, st):
@@ -263,13 +251,24 @@ class seq2nn:
 
         return transformed_st
 
+    '''
+    transfer a dna seq into binary representation
+    '''
     def dna2bin_str(self, dna_str):
         dna2bin_dic = {'A':"00", 'T':"01", 'C':"10", 'G':"11"}
         bin_str = "".join([dna2bin_dic[dna_str[i]] for i in range(len(dna_str))])
         #print('%s to %s'%(dna_str, bin_str))
         return bin_str
 
-    #in shape of (1,len(seq))
+    '''
+    transform a seq (either dna or binary) into nn input (e.g. list of ints)
+
+    input:
+    - a dna (self.seq_type==1) or binary (self.seq_type==0) string seq_str
+    
+    output:
+    - an array, in shape of (1,len(seq/a list of ints))
+    '''
     def transform(self, seq_str):
 
         #print('transform: seq_type='+str(self.seq_type)+' python_type='+str(type(self.seq_type)))
@@ -290,12 +289,17 @@ class seq2nn:
         return seq
 
     '''
-    this is used in calc dist using learned model,
-    to transform all seqs into nn-compatible ones,
-    to avoid transform seq strs during pairwise seq calculation
+    this is used to calc dist based on the learned model,
+    - to transform all seqs into nn-compatible ones,
+    - to avoid redundant transforming seq strs during pairwise seq calculation
+      e.g. for seqs s1, s2, s3, 
+           we need to prepare pairs (s1', s2'), (s1', s3'), (s2', s3')
+           we only need to transform s1, s2, s3 into s1', s2', s3' once
 
-    input: general fa_file
-    output: list of objests (description,  seq/transformed one)
+    input:
+    - general fa_file
+    output:
+    - list of Fa_tSeq objests (description, seq, tseq/transformed one)
     '''
     def transform_seqs_from_fa(self, fa_file):
         seqs = list(SeqIO.parse(fa_file, 'fasta'));
@@ -310,17 +314,22 @@ class seq2nn:
         return fa_tseq_list
 
 '''
-transformed Seq obj from Fa
+a transformed Seq obj from per seq in Fa.
+used by transformed_seqs_from_fa
+
+e.g. 
+>sp_ev_r001_p0_1        tid=cc0 gene=cc0        weight=0.010000
+ATCG
+- description: sp_ev_r001_p0_1        tid=cc0 gene=cc0        weight=0.010000
+- seq: ATCG (binary ==> 00, 01, 10, 11)
+- tseq: [0,1,2,3] (assume blocklen==2, ATCG has 4 blocks corresponding to 0,1,2,3)
 '''
 class Fa_tSeq:
     def __init__(self, dscrpt, seq_str, tSeq):
         self.description = dscrpt
         self.seq = seq_str
         self.tseq = tSeq
-        
-    
-
-     
+   
 
 if __name__ == "__main__":
 
@@ -334,8 +343,8 @@ if __name__ == "__main__":
         s_parser = subs.add_parser("test_Predict")
         s_parser.add_argument('--seq_type', default=0, type=int, help="0: binary 1:dna/ATCG")
         s_parser.add_argument('--model_prefix', type=str, help="prefix of trained model")
-        s_parser.add_argument('--allow_soft_placement', default=True, type=bool)
-        s_parser.add_argument('--log_device_placement', default=False, type=bool)
+        s_parser.add_argument('--allow_soft_placement', default=True, type=bool, help="used when different device options e.g. CPU/GPU available")
+        s_parser.add_argument('--log_device_placement', default=False, type=bool, help="show device placement logs")
         args = parser.parse_args()
         test_Predict(args)
     else:

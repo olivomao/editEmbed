@@ -15,8 +15,15 @@ input:
 - pairwise_dist_file
 
 output:
+
+output data structures to be used for downstream analysis (e.g. histogram/ ROC)
+
 - pairwise_dist_dic
   key: (pair_type, dist_col_idx) val: list of dist vals
+  
+  note: it's possible dist val is nan, in this case, the line will be skipped.
+        number of such lines will be notified.   
+
 - dist_label_dic
   key: dist_col_idx val: description of dist metric (if n/a, just str of key)
 '''
@@ -62,6 +69,8 @@ def load_pairwise_dist(pairwise_dist_file):
 
     #pdb.set_trace()
 
+    cnt_nan = 0
+
     with open(pairwise_dist_file, 'r') as fin:
 
         for line in fin:
@@ -74,6 +83,17 @@ def load_pairwise_dist(pairwise_dist_file):
 
             tp = int(tokens[2])
 
+            has_nan = False 
+
+            for i in range(len(tokens)-3):
+                if tokens[i+3]=='nan':
+                    #pdb.set_trace()
+                    has_nan = True
+                    break
+            if has_nan:
+                cnt_nan += 1
+                continue
+
             for i in range(len(tokens)-3):
 
                 k = (tp, i)
@@ -82,12 +102,23 @@ def load_pairwise_dist(pairwise_dist_file):
 
         iterCnt.finish()
 
-    logPrint('[load_pairwise_dist] finished')
+    logPrint('[load_pairwise_dist] finished; %d lines contain nan'%cnt_nan)
 
     #pdb.set_trace()
 
     return dist_label_dic, pairwise_dist_dic
 
+'''
+input: args.pairwise_dist_file
+           .dist_cols  e.g. 0,1 draw 0-th and 1st dist metrics
+output:
+       args.histogram_fig
+       - per subplot corresponds to a dist metric.
+         histograms wrt pair types (e.g. 0 - same cluster) are drawn.
+
+TBD: types may not be restricted to 0,1.
+     types can also be output by load_pairwise_dist
+'''
 def draw_histogram(args):
 
     logPrint('[draw_histogram] starts')
@@ -119,6 +150,17 @@ def draw_histogram(args):
 
     return
 
+'''
+input: args.pairwise_dist_file
+           .dist_cols  e.g. 0,1 draw 0-th and 1st dist metrics
+           .n_thresholds  # of points per roc curve
+output:
+       args.roc_fig
+       - per curve corresponds to certain dist metric
+
+TBD: types may not be restricted to 0,1.
+     types can also be output by load_pairwise_dist
+'''
 def draw_roc(args):
 
     logPrint('[draw_roc] starts')
@@ -167,6 +209,10 @@ def draw_roc(args):
 
     return
 
+'''
+downstream evaluation (histogram and roc) based on:
+- pairwise_dist_file
+'''
 if __name__ == "__main__":
 
     parser = ArgumentParser()

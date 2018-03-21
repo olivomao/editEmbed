@@ -1,4 +1,31 @@
-TBD: embedding_cgk.py #load, MAXLEN, transform deprecated
+# tag TBD indicates things to be improved in the codes
+# for example, embedding_cgk.py #load, MAXLEN, transform deprecated
+
+
+2018.03.21
+
+summary:
+add code comments
+
+train.py
+- prepare_data: remove tf.FLAGS
+
+simulate_data.py
+- add comments
+
+proc_data.py
+- delete transform and load2 (w/o seq2nn)
+- add code comments
+
+inference.py
+- remove predict(...
+- add code comments
+
+2018.03.20
+
+evaluation.py
+- handle dist==nan issue
+- add code comments
 
 2018.03.19
 

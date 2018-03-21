@@ -18,78 +18,6 @@ There're two source types:
 '''
 def prepare_data(args):
 
-    #pdb.set_trace()
-
-    #input_type = args.input_type
-    '''
-    #I/O
-    if input_type==0:
-        train_input = args.train_input #e.g. data/train.txt
-    else: #input_type==1
-        #pdb.set_trace()
-        train_input1 = args.train_input1
-        train_input2 = args.train_input2   
-        max_num_to_sample = args.max_num_to_sample 
-
-    seq_type = args.seq_type
-    
-    train_output_dir = args.train_output_dir #e.g. data/case_20180101/ to store session model
-    run_cmd('mkdir -p %s'%train_output_dir)
-    ckpt_prefix = train_output_dir + '/ckpt'
-    batch_size = args.batch_size #100
-    num_epochs = args.num_epochs #500    
-
-    #model
-    #pdb.set_trace()
-    if args.load_model==0: #0 or 1
-        load_model = False
-    else:
-        load_model = True
-    embedding_size = args.embedding_size #200
-    num_layers = args.num_layers #3
-    hidden_sz = args.hidden_sz #100
-    
-    #gradient descent and regularization
-    learning_rate = args.learning_rate
-    dropout = args.dropout
-
-    #args to FLAGS
-    tf.flags.DEFINE_integer("input_type", input_type, "0: simulate_binary 1: simulate_data")
-    tf.flags.DEFINE_string("train_output_dir", train_output_dir, "the folder to store trained model")
-
-    tf.flags.DEFINE_boolean("load_model", load_model, "Load existing model")
-    tf.flags.DEFINE_string("ckpt_prefix", ckpt_prefix, "path of the check point data")
-
-    if input_type==0:
-        tf.flags.DEFINE_string("train_input", train_input, "path of the training input in binary_seq_pair format")
-    else:
-        tf.flags.DEFINE_string("train_input1", train_input1, "path of the training input in sampled_seq_fa format") 
-        tf.flags.DEFINE_string("train_input2", train_input1, "path of the training input in pairwise_distance format")
-        tf.flags.DEFINE_integer("max_num_to_sample", max_num_to_sample, "max number to sample from pairwise dist file for training data preparation")
-
-    tf.flags.DEFINE_integer("seq_type", seq_type, "Seq type: 0 binary and 1 dna")
-    tf.flags.DEFINE_integer("embedding_size", embedding_size, "dimension of block seq (of BLOCKLEN length) embedding")
-    tf.flags.DEFINE_integer("num_layers", num_layers, "Number of hidden layers per siamese side")
-    tf.flags.DEFINE_integer("hidden_sz", hidden_sz, "Size of hidden units" )
-    tf.flags.DEFINE_integer("batch_size", batch_size, "Batch size" ) #batch_size
-    tf.flags.DEFINE_integer("num_epochs", num_epochs, "Number of epochs" ) #num_epochs
-    #gradient descent
-    #pdb.set_trace()
-    tf.flags.DEFINE_float("learning_rate", learning_rate, "learning rate")
-    #regularization
-    tf.flags.DEFINE_float("dropout", dropout, "Dropout rate for training")
-    #Misc Parameters (related to HW deployment)
-    tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
-    tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
-
-
-    FLAGS = tf.flags.FLAGS 
-
-    pdb.set_trace()
-
-    FLAGS._parse_flags()
-    '''
-
     #load training data
     if args.input_type==0:
         #pdb.set_trace()
@@ -108,10 +36,11 @@ def prepare_data(args):
 '''
 input:
 FLAGS      contains TF parameters for training; same as args (we use args)
+batches    to yield batch data for training
 n_samples: # of training samples
 
 output:
-session stored at FLAGS.ckpt_prefix
+model stored at FLAGS.ckpt_prefix
 '''
 def train(FLAGS,
           batches,

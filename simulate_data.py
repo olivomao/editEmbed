@@ -207,7 +207,7 @@ def proj_hamming_dist(a, b):
     return min_dist
 
 '''
-calc dist w/ loading learned model
+calc dist w/o loading learned model
 '''
 def calc_non_learned_dist(distance_type,
                           seq1_str,
@@ -241,17 +241,20 @@ seq_type:
 - 0: binary seq
 - 1: dna (ATCG) seq
 
-not consider:
+==== Note:
+
+for seq pairs, we do not consider:
 - seq1 and seq2 of same name
 - seq1 or seq2 is empty
 
+model_prefix: to be used when distance_type==3
+              incorporated into: nn_dist_args.model_prefix         #model prefix ...ckpt to be loaded
+
+max_num_dist_1thread: set max seq pairs for output. mainly used for debugging purpose
 '''
 distance_type_names = ['edit_dist', 'gapped_edit_dist', 'proj_hamming_dist', 'nn_distance']
 
-'''
-model_prefix: to be used when distance_type==3
-              incorporated into: nn_dist_args.model_prefix         #model prefix ...ckpt to be loaded
-'''
+
 def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addheader=0,
                       model_prefix='NA', max_num_dist_1thread=-1):
 

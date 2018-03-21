@@ -70,7 +70,7 @@ model_prfx=$train_dir/model/ckpt #model_ksreeram_server/ckpt
 max_num_dist_1thread=-1
 #ENDCOMMENT
 
-#BEGINCOMMENT
+BEGINCOMMENT
 python simulate_data.py calc_dist \
                         --distance_type_list   $dist_tp_list \
                         --seq_type             $seq_tp \
@@ -81,12 +81,14 @@ python simulate_data.py calc_dist \
                         --clear_intermediate   $clear_interm \
                         --model_prefix         $model_prfx \
                         --max_num_dist_1thread $max_num_dist_1thread
-#ENDCOMMENT
+ENDCOMMENT
 
 BEGINCOMMENT
 
 use_normalization=1
 histogram_fig=$dir/sample_edit_nn.hist.png
+
+#echo $sample_dist
 
 python evaluation.py draw_histogram \
                      --pairwise_dist_file $sample_dist \
