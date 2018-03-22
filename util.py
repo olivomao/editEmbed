@@ -138,6 +138,9 @@ class iterCounter:
 
     def inc(self):
 
+        if self.N==0:
+            return
+
         if self.N<100:
             self.p += 1
             sys.stdout.write('\r');

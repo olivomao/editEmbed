@@ -1,6 +1,32 @@
 # tag TBD indicates things to be improved in the codes
 # for example, embedding_cgk.py #load, MAXLEN, transform deprecated
 
+2018.03.22
+
+summary: apply normalization on edit dist and lstm layer output. balance number of different types of pairs.
+
+edit_dist.py
+- use normed dist
+
+evaluation.py
+- fix a bug for draw_histogram when there's only one dist metric (only one subplot)
+
+inference.py
+- hidden layer output normalized
+
+proc_data.py
+- rand sample type 1 pairs so that number of type 0 and type 1 pairs are similar.
+
+util.py
+- fix a bug for iterCounter.inc() (to avoid zero division)
+
+2018.03.21
+
+summary: support cgk embedding
+
+simulate_data.py
+- add support for cgk embedding (both binary and dna seq; rand seq same for both seqs of a pair)
+
 2018.03.21
 
 summary: support export_embed. e.g. x==>f(x)

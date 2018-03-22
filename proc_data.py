@@ -1,4 +1,4 @@
-import pdb
+import pdb, random
 import numpy as np
 from Bio import SeqIO
 
@@ -161,6 +161,7 @@ def load2(args): #sampled_seq_fa, pairwise_dist, seq_type, max_num_to_sample=-1)
     x2 = []
     y  = []
     iterCnt = iterCounter(N_tot, "sample training data" )
+    cnt_1 = 0
     with open(pairwise_dist, 'r') as fin:
         for line in fin:
             iterCnt.inc()
@@ -169,12 +170,19 @@ def load2(args): #sampled_seq_fa, pairwise_dist, seq_type, max_num_to_sample=-1)
             if max_num_to_sample!=-1 and len(x1)>max_num_to_sample:
                 break 
             tokens = line.split()
+            tp = int(tokens[2])
+            if tp==1:
+                #pdb.set_trace()
+                rate = float(n_tp[0])/n_tp[1]
+                dice = random.random()
+                if dice >= rate: continue
+                cnt_1 += 1
             s1 = dic_id_seq[tokens[0]] #ATCG transformed to bin
             x1.append(s1)
             s2 = dic_id_seq[tokens[1]]
             x2.append(s2)
             y.append(float(tokens[3]))
     iterCnt.finish()
-    logPrint("training data sampled")
+    logPrint("training data sampled. tot=%d and type_1=%d"%(len(x1), cnt_1))
     #pdb.set_trace()
     return x1, x2, y, [], [] #last two items correspond to x1_str and x2_str but deprecated

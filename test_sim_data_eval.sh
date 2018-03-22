@@ -4,8 +4,8 @@ alias ENDCOMMENT="fi"
 Python=/usr/bin/python #TensorFlow supported
 
 #I/O
-dir=data_sim_data_type_dna/eval/
-train_dir=data_sim_data_type_dna/train/
+dir=data_sim_data_type_dna/case2/eval/
+train_dir=data_sim_data_type_dna/case2/train/
 mkdir -p $dir 
 
 cluster_fa=$dir/cluster.fa
@@ -28,15 +28,15 @@ python simulate_data.py gen_cluster_center \
 ENDCOMMENT
 
 #I/O
-sample_fa=$dir/sample_rate_001_to_003.fa
+sample_fa=$dir/sample_rate_001.fa
 #sample config
-sample_prefix=sp_ev_r003
+sample_prefix=sp
 n_tot_samples=-1 #if >0 then each cluster has n_tot_samples*weight seqs to be sampled
 n_copy=10
 #channel config
-rate_ins=0.03
-rate_del=0.03
-rate_sub=0.03
+rate_ins=0.01
+rate_del=0.01
+rate_sub=0.01
 #parallel config
 n_threads=40
 clear_split=1 #only used for multi-threads
@@ -62,12 +62,12 @@ ENDCOMMENT
 
 #BEGINCOMMENT
 #load model for eval
-dist_tp_list=0,3 #0:edit 3:nn_dist
-sample_dist=$dir/sample_rate_001_to_003.dist
+dist_tp_list=0,2,3 #0,3 #0:edit 3:nn_dist
+sample_dist=$dir/sample_eval_rate_001.dt_0_2_3.dist
 add_hd=1
 clear_interm=1
 #model_prfx=$train_dir/model/ckpt #model_ksreeram_server/ckpt
-model_prfx=$train_dir/model_addEmbedOut/ckpt
+model_prfx=$train_dir/model_normedEmbed/ckpt
 max_num_dist_1thread=-1
 #ENDCOMMENT
 
@@ -86,32 +86,39 @@ ENDCOMMENT
 
 #[4] downstream evaluation -- draw histogram or roc
 
-BEGINCOMMENT
+#BEGINCOMMENT
 
-use_normalization=1
-histogram_fig=$dir/sample_edit_nn.hist.png
+use_normalization=0
+histogram_fig=$dir/sample_eval_rate_001.dt_0_2_3.norm_$use_normalization.hist.png
+dist_cols=na
 
 #echo $sample_dist
+
+#BEGINCOMMENT
 
 python evaluation.py draw_histogram \
                      --pairwise_dist_file $sample_dist \
                      --histogram_fig $histogram_fig \
+                     --dist_cols $dist_cols \
                      --normalized $use_normalization
 
-roc_fig=$dir/sample_edit_nn.roc.png 
+roc_fig=$dir/sample_eval_rate_001.dt_0_2_3.norm_$use_normalization.roc.png
 n_thresholds=100
 
+#ENDCOMMENT
+
+#BEGINCOMMENT
 python evaluation.py draw_roc \
                      --pairwise_dist_file $sample_dist \
                      --roc_fig $roc_fig \
                      --n_thresholds $n_thresholds \
                      --normalized $use_normalization
 
-ENDCOMMENT
+#ENDCOMMENT
          
 #[5] clustering related -- export embedding
 
-#BEGINCOMMENT
+BEGINCOMMENT
 
 input_fa=$dir/sample_rate_001.fa
 embed_output=$dir/sample_rate_001.embed.fa
@@ -121,5 +128,5 @@ python evaluation.py export_embedding \
                      --input_fa $input_fa \
                      --embed_output $embed_output \
                      --model_prefix $model_prfx
-#ENDCOMMENT         
+ENDCOMMENT         
 

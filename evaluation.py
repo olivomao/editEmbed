@@ -133,14 +133,21 @@ def draw_histogram(args):
     #pdb.set_trace()
 
     #draw histogram
-    fig, axes = plt.subplots(nrows=len(dist_cols))
-    for i in dist_cols:
-        #i_min = min(min(pairwise_dist_dic[(0,i)]), min(pairwise_dist_dic[(1,i)]))
-        #i_max = max(max(pairwise_dist_dic[(0,i)]), max(pairwise_dist_dic[(1,i)]))
-        axes[i].hist(pairwise_dist_dic[(0, i)], 50, normed=args.normalized, facecolor='green', histtype='step', label='same cluster')
-        axes[i].hist(pairwise_dist_dic[(1, i)], 50, normed=args.normalized, facecolor='red', histtype='step', label='different cluster')
-        axes[i].set_title('%s'%dist_label_dic[i])
-        axes[i].legend()
+    if len(dist_cols)>1:
+        fig, axes = plt.subplots(nrows=len(dist_cols))
+        for i in dist_cols:
+            #i_min = min(min(pairwise_dist_dic[(0,i)]), min(pairwise_dist_dic[(1,i)]))
+            #i_max = max(max(pairwise_dist_dic[(0,i)]), max(pairwise_dist_dic[(1,i)]))
+            axes[i].hist(pairwise_dist_dic[(0, i)], 50, normed=args.normalized, facecolor='green', histtype='step', label='same cluster')
+            axes[i].hist(pairwise_dist_dic[(1, i)], 50, normed=args.normalized, facecolor='red', histtype='step', label='different cluster')
+            axes[i].set_title('%s'%dist_label_dic[i])
+            axes[i].legend()
+    else:
+        fig, ax = plt.subplots()
+        ax.hist(pairwise_dist_dic[(0, dist_cols[0])], 50, normed=args.normalized, facecolor='green', histtype='step', label='same cluster')
+        ax.hist(pairwise_dist_dic[(1, dist_cols[0])], 50, normed=args.normalized, facecolor='red', histtype='step', label='different cluster')
+        ax.set_title('%s'%dist_label_dic[0])
+        ax.legend()
 
     #show/save all
     plt.tight_layout()

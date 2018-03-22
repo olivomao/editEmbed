@@ -4,7 +4,7 @@ alias ENDCOMMENT="fi"
 Python=/usr/bin/python #TensorFlow supported
 
 #I/O
-dir=data_sim_data_type_dna/train/
+dir=data_sim_data_type_dna/case2/train/
 mkdir -p $dir 
 
 cluster_fa=$dir/cluster.fa
@@ -27,17 +27,17 @@ python simulate_data.py gen_cluster_center \
 ENDCOMMENT
 
 #I/O
-sample_fa=$dir/sample_train_rate_001_to_003.fa
+sample_fa=$dir/sample_train_rate_001.fa
 #sample config
-sample_prefix=sp_tr_r003
+sample_prefix=sp
 n_tot_samples=-1 #if >0 then each cluster has n_tot_samples*weight seqs to be sampled
 n_copy=10
 #channel config
-rate_ins=0.03
-rate_del=0.03
-rate_sub=0.03
+rate_ins=0.01
+rate_del=0.01
+rate_sub=0.01
 #parallel config
-n_threads=40
+n_threads=1
 clear_split=1 #only used for multi-threads
 
 #[2] Sample noisy seqs
@@ -62,7 +62,7 @@ ENDCOMMENT
 #BEGINCOMMENT
 #load model for eval
 dist_tp_list=0 #0:edit 3:nn_dist
-sample_dist=$dir/sample_train_rate_001_to_003.dist
+sample_dist=$dir/sample_train_rate_001.dist
 add_hd=1
 clear_interm=1
 model_prfx=$dir/model/ckpt #model_ksreeram_server/ckpt
@@ -92,7 +92,7 @@ python simulate_data.py calc_dist \
 ENDCOMMENT
 
 #training data
-train_output_dir=$dir/model/
+train_output_dir=$dir/model_normedEmbed/
 max_num_to_sample=-1 #in case too many (inbalanced) dist pairs
 batch_sz=100
 n_epochs=500

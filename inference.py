@@ -82,12 +82,15 @@ class siamese:
         with tf.variable_scope("BiRNN") as scope:
 
             self.out1 = self.BiRNN(self.embedded_x1, self.dropout, FLAGS)
+            self.out1 = self.out1 / tf.norm(self.out1)
+            #pdb.set_trace()
             self.out1 = tf.identity(self.out1, name="out1")
 
             scope.reuse_variables()
             #pdb.set_trace()
 
             self.out2 = self.BiRNN(self.embedded_x2, self.dropout, FLAGS)
+            self.out2 = self.out2 / tf.norm(self.out2)
             self.out2 = tf.identity(self.out2, name="out2")
 
         #distance
