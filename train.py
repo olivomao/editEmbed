@@ -3,10 +3,12 @@ import datetime
 import time
 import pdb
 from argparse import ArgumentParser
+import numpy as np
 
 #from global_vals import *
 from proc_data import *
 import inference
+from tensorflow.python import debug as tf_debug
 
 '''
 There're two source types:
@@ -38,13 +40,15 @@ input:
 FLAGS      contains TF parameters for training; same as args (we use args)
 batches    to yield batch data for training
 n_samples: # of training samples
+debug:     only used (True) for debug purpose
 
 output:
 model stored at FLAGS.ckpt_prefix
 '''
 def train(FLAGS,
           batches,
-          n_samples
+          n_samples,
+          debug=False
           ):
 
     #load model
@@ -57,12 +61,20 @@ def train(FLAGS,
 
     grads_and_vars = optimizer.compute_gradients(siamese.loss)
 
-    tr_op_set = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
+    capped_gvs = []
+    for grad, var in grads_and_vars:
+        if grad is not None:
+            #capped_gvs.append((tf.clip_by_value(grad, -1., 1.), var))
+            capped_gvs.append((tf.clip_by_norm(grad, 1.), var))
+        else:
+            capped_gvs.append((grad, var))
+
+    tr_op_set = optimizer.apply_gradients(capped_gvs, global_step=global_step)
 
     #session
     session_conf = tf.ConfigProto(allow_soft_placement=FLAGS.allow_soft_placement,
                                   log_device_placement=FLAGS.log_device_placement)
-    sess = tf.Session(config=session_conf)
+    sess = tf.InteractiveSession(config=session_conf) #tf.Session(config=session_conf)
 
     #
     saver = tf.train.Saver()
@@ -75,6 +87,8 @@ def train(FLAGS,
     #pdb.set_trace()
     n_batches = n_samples/FLAGS.batch_size * FLAGS.num_epochs
 
+    if debug==True: sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+
     for i in range(n_batches):
 
         b_x1, b_x2, b_y = batches.next()
@@ -83,6 +97,10 @@ def train(FLAGS,
                                                                                         siamese.input_x2: b_x2,
                                                                                         siamese.input_y:  b_y, 
                                                                                         siamese.dropout:  FLAGS.dropout})
+
+        if debug==True and np.isnan(b_loss):
+            print('loss is nan at i=%d'%i)
+            pdb.set_trace()
 
         if b_step % 100 == 0:
             try:

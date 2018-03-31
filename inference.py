@@ -54,6 +54,8 @@ class siamese:
     '''
     def __init__(self, FLAGS):
 
+        tf.set_random_seed(0)
+
         #pdb.set_trace()
         #store into the model for future usage
         self.maxlen = tf.Variable(FLAGS.maxlen, name="maxlen")
@@ -73,6 +75,8 @@ class siamese:
         with tf.name_scope("embedding"):
 
             self.W = tf.Variable(tf.random_uniform([numembed, FLAGS.embedding_size]))
+
+            #self.W = tf.Print(self.W, [self.W], 'self.W: ')
 
             self.embedded_x1 = tf.nn.embedding_lookup(self.W, self.input_x1)
 
@@ -102,6 +106,8 @@ class siamese:
         with tf.name_scope("loss"):
             #self.loss = tf.reduce_sum(tf.square(tf.subtract(self.distance, self.input_y)))/FLAGS.batch_size
             self.loss = tf.reduce_mean(tf.square(tf.subtract(self.distance, self.input_y)), name="loss")
+
+            #self.loss = tf.Print(self.loss, [self.loss], '\tself.loss:')
 
         #pdb.set_trace()
 

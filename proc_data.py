@@ -121,6 +121,8 @@ dna2bin = {"A":"00", "T":"01", "C":"10", "G":"11"}
 
 def load2(args): #sampled_seq_fa, pairwise_dist, seq_type, max_num_to_sample=-1):
 
+    random.seed(0)
+
     sampled_seq_fa = args.train_input1
     pairwise_dist = args.train_input2
     seq_type = args.seq_type

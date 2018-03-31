@@ -1,5 +1,21 @@
 # tag TBD indicates things to be improved in the codes
 # for example, embedding_cgk.py #load, MAXLEN, transform deprecated
+#
+# debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
+
+2018.03.30
+
+summary: set rand seed 0, add tfdbg option and do gradient clipping
+
+inference.py
+- siamese init: rand seed 0 (for debug purpose and reproducibility)
+
+proc_data.py
+- load2: rand seed 0 (for debug purpose and reproducibility)
+
+train.py
+- add debug option (tfdbg before sess.run and check loss nan)
+- grad to be clipped by norm
 
 2018.03.22
 
