@@ -1,0 +1,22 @@
+#
+# root_dir: root folder for all kinds of experiments
+# data_label: describe data (e.g. seq len, indel error rate etc)
+# model_label: describe model (e.g. tune_hidden_layer)
+# paramA_a_paramB_b...: describe different param combinations (e.g. hdsz_100...) 
+#                       in case no tuning, just use 'single_set'
+
+[root_dir]/[data_label]/train/data/cluster.fa
+                       |     |    /sample.fa
+                       |     |    /sample.dist
+                       |     /[model_label]/[paramA_a_paramB_b...]/ckpt_1
+                       |                   |                      /ckpt_2
+                       |                   |                      /...
+                       |                   /config.txt
+                       /eval//data/cluster.fa
+                             |    /sample.fa
+                             /[model_label]/[paramA_a_paramB_b...]/[ckpt_i]/sample.dist
+                                                                           /hist.norm_%d.png
+                                                                           /hist.norm_%d.txt
+                                                                           /roc.norm_%d.png
+                                                                           /roc.norm_%d.txt
+                                                                           /sample.embed.fa
