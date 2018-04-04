@@ -3,6 +3,18 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.04.04
+
+summary: complete batch_test_eval (esp select and debug ckpt)
+
+batch_test.py
+- use ';' to seperate param combinations
+- add select_ckpt (for a set of params, there can be several ckpt)
+
+inference.py
+- norm path for Predict's model_prefix, to avoid error when restoring saved tf model
+
+
 2018.03.30
 
 summary: set rand seed 0, add tfdbg option and do gradient clipping

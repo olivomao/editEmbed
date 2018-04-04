@@ -16,7 +16,7 @@ functions
 '''
 input: config_file
        e.g.
-       A      a1,a2
+       A      a1;a2
        B      b1
 
 output: list of [desc, dic w/ key of label and val of val]
@@ -25,6 +25,7 @@ output: list of [desc, dic w/ key of label and val of val]
          [A_a2_B_b1, dic{A: a2, B: b1}]
        ]
 Note:
+- a1,a2 is not param combination, need a1;a2
 - lines starting w/ '#' in config_file are skipped
 - if desc=='single_set', there is no param combinations
 '''
@@ -40,7 +41,7 @@ def parse_config_file(config_file):
             tokens = line.strip().split()
             if len(tokens)<2: continue
             key = tokens[0]
-            vals = [v for v in tokens[1].split(',') if v!='']
+            vals = [v for v in tokens[1].split(';') if v!='']
             if(len(vals)==1):
                 shared_dic[key]=vals[0]
             else:
@@ -168,7 +169,7 @@ Note:
 '''
 def batch_test_eval_1job(input_args):
 
-    pdb.set_trace()
+    #pdb.set_trace()
 
     param_dic, param_desc, args = input_args #packed to input_args for parallel purpose
 
@@ -185,23 +186,24 @@ def batch_test_eval_1job(input_args):
 
     data_dir = '%s/%s/eval/data/'%(root_dir, data_label)
     run_cmd('mkdir -p %s'%data_dir); logPrint('%s created'%data_dir)
-    model_dir = '%s/%s/eval/%s/%s/'%(root_dir, data_label, model_label, param_desc)
-    run_cmd('mkdir -p %s'%model_dir); logPrint('%s created'%model_dir)
+    model_train_dir = '%s/%s/train/%s/%s/'%(root_dir, data_label, model_label, param_desc)
+    model_eval_dir = '%s/%s/eval/%s/%s/'%(root_dir, data_label, model_label, param_desc)
+    run_cmd('mkdir -p %s'%model_eval_dir); logPrint('%s created'%model_eval_dir)
 
     sample_fa = '%s/sample.fa'%data_dir
 
     #---------- select a trained model (i.e. a check point)
-    ckpt_path, ckpt_name = select_ckpt(model_dir)
+    ckpt_path, ckpt_name, step_loss_fn_list = select_ckpt(model_train_dir)
 
     if ckpt_path == '':
         logPrint(logLabel+'End (no valid ckpt found)')
-        pdb.set_trace()
+        #pdb.set_trace()
         return
     else:
-        ckpt_dir = '%s/%s'%(model_dir, ckpt_name)
+        ckpt_dir = '%s/%s/'%(model_eval_dir, ckpt_name)
         run_cmd('mkdir -p %s'%ckpt_dir); logPrint('%s created'%ckpt_dir)
         sample_dist = '%s/sample.dist'%ckpt_dir
-        pdb.set_trace()
+        #pdb.set_trace()
     
     #---------- proc eval job
 
@@ -209,7 +211,7 @@ def batch_test_eval_1job(input_args):
 
     # dist
     cmd = 'python simulate_data.py calc_dist '+\
-                        '--distance_type_list %s '%param_dic['dist_tp_list'] +\
+                        '--distance_type_list %s '%param_dic['dist_tp_list_eval'] +\
                         '--seq_type %s '%param_dic['seq_type'] +\
                         '--seq_fa %s '%sample_fa +\
                         '--dist_out %s '%sample_dist+\
@@ -218,27 +220,30 @@ def batch_test_eval_1job(input_args):
                         '--clear_intermediate %s '%param_dic['clear_interm_eval'] +\
                         '--model_prefix %s '%ckpt_path +\
                         '--max_num_dist_1thread %s '%param_dic['max_num_dist_1thread_eval']
-    pdb.set_trace(); if 0 in tasks: run_cmd(cmd)
+    #pdb.set_trace();
+    if 0 in tasks: run_cmd(cmd)
 
     # hist
-    hist_fig_path = '%s/hist.norm_%d.png'%(ckpt_dir)
+    hist_fig_path = '%s/hist.norm_%s.png'%(ckpt_dir, param_dic['normalized_hist'])
 
     cmd = 'python evaluation.py draw_histogram '+\
                      '--pairwise_dist_file %s '%sample_dist +\
                      '--histogram_fig %s '%hist_fig_path +\
                      '--dist_cols %s '%param_dic['dist_cols'] +\
                      '--normalized %s '%param_dic['normalized_hist']
-    pdb.set_trace(); if 1 in tasks: run_cmd(cmd)
+    #pdb.set_trace(); 
+    if 1 in tasks: run_cmd(cmd)
 
     # roc
-    roc_fig_path = '%s/roc.norm_%d.png'%(ckpt_dir)
+    roc_fig_path = '%s/roc.norm_%s.png'%(ckpt_dir, param_dic['normalized_roc'])
 
     cmd = 'python evaluation.py draw_roc '+\
                      '--pairwise_dist_file %s '%sample_dist +\
                      '--roc_fig %s '%roc_fig_path +\
                      '--n_thresholds %s '%param_dic['n_thresholds'] +\
                      '--normalized %s '%param_dic['normalized_roc']
-    pdb.set_trace(); if 2 in tasks: run_cmd(cmd)
+    #pdb.set_trace(); 
+    if 2 in tasks: run_cmd(cmd)
 
     # export embed
     embed_output='%s/sample.embed.fa'
@@ -248,20 +253,77 @@ def batch_test_eval_1job(input_args):
                      '--input_fa %s '%sample_fa +\
                      '--embed_output %s '%embed_output +\
                      '--model_prefix %s '%ckpt_path
-    pdb.set_trace(); if 3 in tasks: run_cmd(cmd)
+    #pdb.set_trace(); 
+    if 3 in tasks: run_cmd(cmd)
 
     logPrint(logLabel+'End')
 
     return
 
 '''
-ckpt_path, ckpt_name = select_ckpt(model_dir)
+input: model_dir, can contain:
+                  {ckpt_step_S1_loss_L1.meta or .data or .index}
+output:
+       ckpt_path: model_dir/ckpt_step_S_loss_L (min L)
+       ckpt_name: ckpt_step_S_loss_L
+       itms: list of (step, loss, relevant ckpt_name) sorted by step
+
+note:
+- it's possible that there's no trained model in model_dir (e.g. loss is nan).
+  so ckpt_path is '', ckpt_name is '' and itms is []
 '''
 def select_ckpt(model_dir):
 
-    pdb.set_trace()
+    #pdb.set_trace()
 
-    return
+    filenames = os.listdir(model_dir)
+    '''
+    example:
+    ['checkpoint', 'ckpt_step_14000_loss_0.000184924.meta', 'ckpt_step_15000_loss_0.00024944.data-00000-of-00001', 'ckpt_step_15000_loss_0.00024944.meta', 'ckpt_step_16000_loss_9.85918e-05.data-00000-of-00001', 'ckpt_step_16000_loss_9.85918e-05.index', 'ckpt_step_16000_loss_9.85918e-05.meta', 'ckpt_step_17000_loss_0.000209771.data-00000-of-00001', 'ckpt_step_17000_loss_0.000209771.index', 'ckpt_step_17000_loss_0.000209771.meta', 'ckpt_step_13000_loss_0.000402888.data-00000-of-00001', 'ckpt_step_13000_loss_0.000402888.index', 'ckpt_step_13000_loss_0.000402888.meta', 'ckpt_step_14000_loss_0.000184924.data-00000-of-00001', 'ckpt_step_14000_loss_0.000184924.index', 'ckpt_step_15000_loss_0.00024944.index']
+    '''
+
+    filenames = [fn for fn in filenames if len(fn)>=4 and fn[-4:]=='meta']
+    #pdb.set_trace()
+    '''
+    example:
+    ['ckpt_step_14000_loss_0.000184924.meta', 'ckpt_step_15000_loss_0.00024944.meta', 'ckpt_step_16000_loss_9.85918e-05.meta', 'ckpt_step_17000_loss_0.000209771.meta', 'ckpt_step_13000_loss_0.000402888.meta']
+    '''
+
+    if filenames == []:
+
+        ckpt_path = ''
+        ckpt_name = ''
+        return ckpt_path, ckpt_name, []
+
+    itms = []
+    for fn in filenames:
+
+        tokens = fn[:-5].split('_')
+        step = int(tokens[2])
+        if tokens[4]=='nan': continue
+
+        loss = float(tokens[4])
+        itms.append((step, loss, fn))
+    #pdb.set_trace()
+
+    if itms == []:
+
+        ckpt_path = ''
+        ckpt_name = ''
+        return ckpt_path, ckpt_name, []        
+
+    itms_sort_step = sorted(itms, key=lambda x: x[0])
+    itms_sort_loss = sorted(itms, key=lambda x: x[1])
+
+    try:
+        ckpt_name = itms_sort_loss[0][2][:-5] #skip .meta
+    except:
+        pdb.set_trace()
+    ckpt_path = model_dir + '/' + ckpt_name
+
+    #pdb.set_trace()
+
+    return ckpt_path, ckpt_name, itms_sort_step
 
 '''
 Note:
@@ -417,6 +479,17 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         config_desc_dic_list = parse_config_file(args.config_file)
+
+        pdb.set_trace()
+
+    elif sys.argv[1]=='select_ckpt':
+        s_parser = subs.add_parser('select_ckpt')
+
+        s_parser.add_argument('--model_dir', type=str, help='model_dir')
+
+        args = parser.parse_args()
+
+        select_ckpt(args.model_dir)
 
         pdb.set_trace()
     

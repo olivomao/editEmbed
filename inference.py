@@ -1,7 +1,7 @@
 import tensorflow as tf 
 from argparse import ArgumentParser
 import pdb
-import sys
+import sys, os
 import numpy as np
 from Bio import SeqIO
 
@@ -148,6 +148,7 @@ class Predict:
 
         sess = tf.Session(config=session_conf)
 
+        #pdb.set_trace()
         saver = tf.train.import_meta_graph("%s.meta"%ckpt) #tf.train.Saver()
 
         sess.run(tf.global_variables_initializer())    
@@ -184,7 +185,9 @@ class Predict:
                        log_device_placement=False):
 
         self.seq_type = seq_type
-        self.model_prefix = model_prefix
+        #self.model_prefix = model_prefix
+        self.model_prefix = os.path.normpath(model_prefix)
+        #pdb.set_trace()
         self.allow_soft_placement = allow_soft_placement
         self.log_device_placement = log_device_placement
 
