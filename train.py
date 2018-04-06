@@ -100,7 +100,7 @@ def train(FLAGS,
 
         if debug==True and np.isnan(b_loss):
             print('loss is nan at i=%d'%i)
-            pdb.set_trace()
+            return #pdb.set_trace()
 
         if b_step % 100 == 0:
             try:
@@ -108,7 +108,7 @@ def train(FLAGS,
                 if b_step % 1000 == 0:
                     #pdb.set_trace()
                     print("save model b_step=%d"%b_step)
-                    saver.save(sess, FLAGS.train_output_dir+'ckpt')
+                    saver.save(sess, FLAGS.train_output_dir+'ckpt_step_%d_loss_%s'%(b_step, str(b_loss)))
             except:
                 print("train step=%d exception"%(b_step))
                 break
