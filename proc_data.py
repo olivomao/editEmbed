@@ -162,6 +162,7 @@ def load2(args): #sampled_seq_fa, pairwise_dist, seq_type, max_num_to_sample=-1)
     x1 = []
     x2 = []
     y  = []
+    z = [] # list of (x1,x2,y) to be shuffled
     iterCnt = iterCounter(N_tot, "sample training data" )
     cnt_1 = 0
     with open(pairwise_dist, 'r') as fin:
@@ -180,11 +181,44 @@ def load2(args): #sampled_seq_fa, pairwise_dist, seq_type, max_num_to_sample=-1)
                 if dice >= rate: continue
                 cnt_1 += 1
             s1 = dic_id_seq[tokens[0]] #ATCG transformed to bin
-            x1.append(s1)
+            #x1.append(s1)
             s2 = dic_id_seq[tokens[1]]
-            x2.append(s2)
-            y.append(float(tokens[3]))
+            #x2.append(s2)
+            #y.append(float(tokens[3]))
+            z.append((s1,s2,float(tokens[3])))
     iterCnt.finish()
+    random.shuffle(z)
+    #pdb.set_trace()
+    x1 = [i[0] for i in z]
+    x2 = [i[1] for i in z]
+    y  = [i[2] for i in z]
     logPrint("training data sampled. tot=%d and type_1=%d"%(len(x1), cnt_1))
     #pdb.set_trace()
     return x1, x2, y, [], [] #last two items correspond to x1_str and x2_str but deprecated
+
+'''
+input:
+- raw training data x1=[...,[sample_i_1],...]
+                    x2=[...,[sample_i_2],...]
+                    y =[...,[sample_i_y],...]
+output:
+- x1_tr, x2_tr, y_tr: 85% of x1,x2 and y for training
+- x1_vld, x2_vld, y_vld: 15% of x1,x2 and y for validation
+'''
+def split_train_validation(x1, x2, y):
+
+    N_samples = len(x1)
+    N_tr_samples = int(float(N_samples) * 0.85)
+    
+    logPrint("split %d raw training samples into %d for training and %d for validation"%(N_samples, N_tr_samples, N_samples-N_tr_samples))
+    #pdb.set_trace()
+
+    x1_tr = x1[:N_tr_samples]
+    x2_tr = x2[:N_tr_samples]
+    y_tr  = y[:N_tr_samples]
+
+    x1_vld = x1[N_tr_samples:]
+    x2_vld = x2[N_tr_samples:]
+    y_vld = y[N_tr_samples:]
+
+    return x1_tr, x2_tr, y_tr, x1_vld, x2_vld, y_vld

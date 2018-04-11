@@ -1,7 +1,8 @@
+import pdb
+#pdb.set_trace()
 import tensorflow as tf 
 import datetime
 import time
-import pdb
 from argparse import ArgumentParser
 import numpy as np
 
@@ -9,6 +10,8 @@ import numpy as np
 from proc_data import *
 import inference
 from tensorflow.python import debug as tf_debug
+
+import matplotlib.pyplot as plt
 
 '''
 There're two source types:
@@ -28,18 +31,67 @@ def prepare_data(args):
         #pdb.set_trace()
         x1, x2, y, _, _ = load2(args)
 
-    batches = batch_iter(x1, x2, y, args)
+    x1_tr, x2_tr, y_tr, x1_vld, x2_vld, y_vld = split_train_validation(x1, x2, y)
 
-    n_samples = len(x1)
+    #pdb.set_trace()
 
-    return batches,n_samples
+    batches = batch_iter(x1_tr, x2_tr, y_tr, args)
 
+    n_samples = len(x1_tr)
+
+    return batches,n_samples, (x1_vld, x2_vld, y_vld)
+
+'''
+input is log file (i, train_loss, validation_loss)
+
+output is log fig (x-axis is i, y-axis contains 2 curves: train_loss and validation loss)
+'''
+def plot_log(input_log, output_fig):
+
+    #pdb.set_trace()
+
+    logPrint('[plot_log] starts')
+
+    #load data
+    list_i = []
+    list_tr_loss = []
+    list_vld_loss = []
+
+    with open(input_log, 'r') as fi:
+
+        for line in fi:
+
+            if line!='' and line[0]=='#': continue
+
+            tokens = line.strip().split()
+            if tokens==[]: continue
+
+            list_i.append(int(tokens[0]))
+            list_tr_loss.append(float(tokens[1]))
+            list_vld_loss.append(float(tokens[2]))
+
+    #pdb.set_trace()
+
+    fig, ax = plt.subplots()
+    ax.plot(list_i, list_tr_loss, marker='o', label='training loss')
+    ax.plot(list_i, list_vld_loss, marker='o', label='validation loss')
+    ax.legend()
+
+    #show/save all
+    plt.tight_layout()
+    plt.savefig(output_fig) #plt.show()
+    #pdb.set_trace()
+
+    logPrint('[plot_log] finished. %s written'%output_fig)
+
+    return
 
 '''
 input:
 FLAGS      contains TF parameters for training; same as args (we use args)
 batches    to yield batch data for training
 n_samples: # of training samples
+vld_data:  (x1_vld, x2_vld, y_vld), extracted from raw training data (e.g. 15%) used for validation
 debug:     only used (True) for debug purpose
 
 output:
@@ -48,6 +100,7 @@ model stored at FLAGS.ckpt_prefix
 def train(FLAGS,
           batches,
           n_samples,
+          vld_data,
           debug=False
           ):
 
@@ -84,36 +137,68 @@ def train(FLAGS,
 
     if FLAGS.load_model==True:
         saver.restore(sess, FLAGS.ckpt_prefix)
+    
     #pdb.set_trace()
     n_batches = n_samples/FLAGS.batch_size * FLAGS.num_epochs
+
+    #prepare validation data
+    x1_vld, x2_vld, y_vld = vld_data
+    x1_vld = np.asarray(x1_vld)
+    x2_vld = np.asarray(x2_vld)
+    y_vld  = np.asarray(y_vld)
+
+    logPath = FLAGS.train_output_dir+'/log.txt'
+    logFigPath = FLAGS.train_output_dir+'/log.png' 
+
+    logFile = open(logPath, 'w'); logFile.write('#i\ttrain_loss\tvalidation_loss\n')
 
     if debug==True: sess = tf_debug.LocalCLIDebugWrapperSession(sess)
 
     for i in range(n_batches):
 
-        b_x1, b_x2, b_y = batches.next()
+        try:
+            b_x1, b_x2, b_y = batches.next()
+        except:
+            pdb.set_trace()
 
         _, b_step, b_loss = sess.run([tr_op_set, global_step, siamese.loss], feed_dict={siamese.input_x1: b_x1,
                                                                                         siamese.input_x2: b_x2,
                                                                                         siamese.input_y:  b_y, 
                                                                                         siamese.dropout:  FLAGS.dropout})
 
-        if debug==True and np.isnan(b_loss):
-            print('loss is nan at i=%d'%i)
+        
+        #pdb.set_trace()
+        vld_loss = sess.run([siamese.loss], feed_dict={  siamese.input_x1: x1_vld,
+                                                         siamese.input_x2: x2_vld,
+                                                         siamese.input_y:  y_vld, 
+                                                         siamese.dropout:  1})
+        vld_loss = vld_loss[0]
+
+        if np.isnan(b_loss) or np.isnan(vld_loss):
+            print('train loss %s or valid loss %s is nan at i=%d'%(b_loss, vld_loss, i))
+            if logFile.closed==False: logFile.close()
+            plot_log(logPath, logFigPath)
+            #pdb.set_trace()
             return #pdb.set_trace()
+
+        if True: #b_step % 20 == 0:
+            print('i=%d, train_loss=%f, validation_loss=%f'%(i, b_loss, vld_loss))
+            logFile.write('%d\t%f\t%f\n'%(i, b_loss, vld_loss))
 
         if b_step % 100 == 0:
             try:
-                print("train step=%d, loss=%s"%(b_step, str(b_loss)))
-                if b_step % 1000 == 0:
-                    #pdb.set_trace()
-                    print("save model b_step=%d"%b_step)
-                    saver.save(sess, FLAGS.train_output_dir+'ckpt_step_%d_loss_%s'%(b_step, str(b_loss)))
+                print("save model b_step=%d"%b_step)
+                saver.save(sess, FLAGS.train_output_dir+'ckpt_step_%d_loss_%s'%(b_step, str(b_loss)))
             except:
-                print("train step=%d exception"%(b_step))
-                break
+                print("saver.save exception at b_step=%d"%(b_step))
+                if logFile.closed==False: logFile.close()
+                plot_log(logPath, logFigPath)
+                return
 
     #pdb.set_trace()
+    if logFile.closed==False: logFile.close()
+
+    plot_log(logPath, logFigPath)
 
     return
 
@@ -152,10 +237,10 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         #pdb.set_trace()
-        batches,n_samples = prepare_data(args)
+        batches,n_samples, vld_data = prepare_data(args)
         
         #pdb.set_trace()
-        train(args, batches, n_samples)
+        train(args, batches, n_samples, vld_data)
 
         pdb.set_trace()
 
@@ -191,6 +276,17 @@ if __name__ == "__main__":
 
         args = parser.parse_args()
 
-        batches,n_samples = prepare_data(args)
+        batches,n_samples, vld_data = prepare_data(args)
 
-        train(args, batches, n_samples)
+        train(args, batches, n_samples, vld_data)
+
+    elif sys.argv[1]=='test_plot_log':
+
+        s_parser = subs.add_parser('test_plot_log')
+         #IO
+        s_parser.add_argument('--input_log', type=str)
+        s_parser.add_argument('--output_fig', type=str)
+        
+        args = parser.parse_args()
+
+        plot_log(args.input_log, args.output_fig)

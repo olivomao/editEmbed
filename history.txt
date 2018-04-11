@@ -3,6 +3,25 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.04.10
+
+summary: add validation loss. shuffle train and validation data. dump loss curves.
+
+file_structure.txt
+- add loss_log format (to dump training loss and validation loss fig)
+
+storage_structure.txt
+- add log.txt and log.png for training
+
+proc_data.py
+- shuffle x1,x2,y
+- split_train_validation to provide validation data
+
+
+train.py
+- support plot loss (training and validation)
+- also calculate validation
+
 2018.04.04
 
 summary: complete batch_test_eval (esp select and debug ckpt)

@@ -11,6 +11,8 @@
                        |     /[model_label]/[paramA_a_paramB_b...]/ckpt_1
                        |                   |                      /ckpt_2
                        |                   |                      /...
+                       |                   |                      /log.txt #train/validation loss
+                       |                   |                      /log.png  
                        |                   /config.txt
                        /eval//data/cluster.fa
                              |    /sample.fa
