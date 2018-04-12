@@ -1,3 +1,7 @@
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 import pdb
 #pdb.set_trace()
 import tensorflow as tf 
@@ -11,7 +15,7 @@ from proc_data import *
 import inference
 from tensorflow.python import debug as tf_debug
 
-import matplotlib.pyplot as plt
+
 
 '''
 There're two source types:
@@ -150,6 +154,7 @@ def train(FLAGS,
     logPath = FLAGS.train_output_dir+'/log.txt'
     logFigPath = FLAGS.train_output_dir+'/log.png' 
 
+    #'''
     logFile = open(logPath, 'w'); logFile.write('#i\ttrain_loss\tvalidation_loss\n')
 
     if debug==True: sess = tf_debug.LocalCLIDebugWrapperSession(sess)
@@ -197,6 +202,8 @@ def train(FLAGS,
 
     #pdb.set_trace()
     if logFile.closed==False: logFile.close()
+    #'''
+    #pdb.set_trace()
 
     plot_log(logPath, logFigPath)
 
