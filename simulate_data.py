@@ -275,11 +275,11 @@ distance_type_names = ['edit_dist', 'gapped_edit_dist', 'proj_hamming_dist', 'nn
 def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addheader=0,
                       model_prefix='NA', max_num_dist_1thread=-1):
 
-    if 3 in distance_type_list:
+    #pdb.set_trace()
+    if 3 in distance_type_list: 
         pdt = Predict(seq_type, model_prefix)
         #print('pdt seq type '+ str(seq_type))
-        s2n_obj = seq2nn(pdt.seq_type, pdt.maxlen, pdt.blocklen)
-        #s2n_obj = seq2nn(seq_type, 500, 10)
+        s2n_obj = seq2nn(pdt.seq_type, pdt.maxlen, pdt.blocklen) #s2n_obj = seq2nn(seq_type, 500, 10)
         seqs1 = s2n_obj.transform_seqs_from_fa(fa_1); N_seqs1 = len(seqs1)
         seqs2 = s2n_obj.transform_seqs_from_fa(fa_2); N_seqs2 = len(seqs2)
         #pdt = Predict(seq_type, model_prefix)
@@ -312,8 +312,7 @@ def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addhea
         else:
             seq2_idx_range = range(N_seqs2)
 
-        for seq2_idx in seq2_idx_range:
-
+        for seq2_idx in seq2_idx_range: 
             seq1 = seqs1[seq1_idx]
             seq2 = seqs2[seq2_idx]
 
@@ -354,6 +353,7 @@ def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addhea
                     tseq1 = seqs1[seq1_idx].tseq
                     tseq2 = seqs2[seq2_idx].tseq
                     ed = pdt.predict0(tseq1, tseq2)
+                    ed = np.mean(ed)
                 distance_list.append(ed)
 
             #check pair of (x1,x2) type
@@ -361,11 +361,12 @@ def calc_dist_1thread(distance_type_list, seq_type, fa_1, fa_2, dist_out, addhea
 
             line_content = '%s\t%s\t%s\t'%(seq1_id, seq2_id, tp)
             #pdb.set_trace()
-            for ed in distance_list:
-                line_content += '%f\t'%ed
-
-            fo.write('%s\n'%line_content) #pairwise_distance format
-
+            try:
+                for ed in distance_list:
+                    line_content += '%f\t'%ed 
+                fo.write('%s\n'%line_content) #pairwise_distance format
+            except:
+                pdb.set_trace()
         #for seq2_idx
         if max_num_dist_1thread != -1 and cnt>max_num_dist_1thread:
                 break
