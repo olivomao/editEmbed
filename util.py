@@ -28,6 +28,45 @@ def logPrint(log_msg):
     return st
 
 '''
+   s --> int
+or s --> float
+or s
+'''
+def is_int(s):
+    try:
+        r = int(s)
+        return True
+    except:
+        return False
+
+def is_float(s):
+    try:
+        r = float(s)
+        return True
+    except:
+        return False
+
+def convert_str_to_bool_int_float(s):
+
+
+    if s=="True":
+        return True
+    elif s=="False":
+        return False
+
+    elif is_int(s):
+
+        return int(s)
+
+    elif is_float(s):
+
+        return float(s)
+
+    else:
+
+        return s
+
+'''
 return parent_dir and filename of abs dir_path
 '''
 def parent_dir(dir_path):

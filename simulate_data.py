@@ -62,6 +62,59 @@ def gen_cluster_center(args):
 
     return
 
+t2d = {0:'binary', 1:'DNA'} #seq type to description
+m2d = {0:'cgk'} #method to description
+def gen_seq2seq(args):
+
+    #pdb.set_trace()
+
+    logLabel = '[gen_seq2seq]'
+
+    logPrint(logLabel)
+
+    pd, fn = parent_dir(args.output)
+    run_cmd('mkdir -p %s'%pd)
+
+    length = args.length
+
+    if args.seq2seq_type==0: #cgk
+        if args.seq_type==0:
+            L_R = 3*length*2
+        else:
+            L_R = 3*length*4
+        R = np.random.randint(0,2,L_R)
+
+    with open(args.output, 'w') as of:
+
+        #header
+        header = ""
+        header += '## args:' + str(args) + '\n'
+        header += '## ' + 'type:%s'%t2d[args.seq_type] + '\n'
+        header += '## ' + 'method:%s'%m2d[args.seq2seq_type] + '\n'
+        if args.seq2seq_type==0: #cgk
+            header += '## RandSeq:%s\n'%' '.join(str(i) for i in list(R))
+            header += '## RandSeqLen:%d\n'%len(R)
+        of.write(header)
+
+        for i in range(args.num):
+
+            if args.seq2seq_type==0: #cgk
+                if args.seq_type==0:
+                    seq = random_bin_string(length)
+                else:
+                    seq = random_dna_string(length)
+                transformed_seq = cgk_embedding(seq, 
+                                                length, 
+                                                R, 
+                                                args.seq_type,
+                                                padding=False)
+
+            of.write("%s\t%s\n"%(seq, transformed_seq ))
+
+    logPrint("%s %s written"%(logLabel, args.output))
+
+    return
+
 def sample_from_cluster(args):
 
     logPrint("[sample_from_cluster]")
@@ -163,7 +216,7 @@ def check_type(tid_gid_1, tid_gid_2):
 
 Base2Index_DNA = {'A':0, 'C':1, 'T':2, 'G':3}
 Base2Index_Bin = {'0':0, '1':1}
-def cgk_embedding(s, N, R, seq_type=0):
+def cgk_embedding(s, N, R, seq_type=0, padding=True):
 
     #pdb.set_trace()
 
@@ -183,8 +236,10 @@ def cgk_embedding(s, N, R, seq_type=0):
                 i = i + R[(j-1)*2+Base2Index_Bin[c]]
             else:
                 i = i + R[(j-1)*4+Base2Index_DNA[c]]
-        else:
+        elif padding==True:
             s1 = s1 + "N"
+        else:
+            break
     return s1
 
 def hamming(a,b):
@@ -549,6 +604,23 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         gen_cluster_center(args)
+
+    elif sys.argv[1]=='gen_seq2seq':
+
+        #pdb.set_trace()
+
+        s_parser = subs.add_parser('gen_seq2seq')
+
+        s_parser.add_argument('--output', type=str, help="output path of seq2seq in seq2seq_pair format")
+        s_parser.add_argument('--seq_type', type=int, help="type of sequence. 0: binary, 1: ATCG")
+        s_parser.add_argument('--seq2seq_type', type=int, help="type of seq2seq. 0: cgk")
+        s_parser.add_argument('--num', type=int, help="number of clusters")
+        s_parser.add_argument('--length', type=int, help="length of sequence")
+
+        args = parser.parse_args()
+
+        gen_seq2seq(args)
+
 
     elif sys.argv[1]=='sample_from_cluster':
 

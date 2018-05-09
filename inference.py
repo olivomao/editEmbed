@@ -36,16 +36,34 @@ class siamese:
     '''
     def BiRNN(self, embedded_x, dropout, FLAGS):
 
-        #pdb.set_trace()
-        embedded_x = tf.unstack(tf.transpose(embedded_x, perm=[1,0,2])) #(BLOCKS, bs, embedding_size)
+        with tf.variable_scope('BiRNN_fn', reuse=tf.AUTO_REUSE) as scope:
+            #pdb.set_trace()
+            embedded_x = tf.unstack(tf.transpose(embedded_x, perm=[1,0,2])) #(BLOCKS, bs, embedding_size)
 
-        fw_cells = self.RNN("fw", dropout, FLAGS)
+            fw_cells = self.RNN("fw", dropout, FLAGS)
 
-        bw_cells = self.RNN("bw", dropout, FLAGS)
+            bw_cells = self.RNN("bw", dropout, FLAGS)
 
-        outputs, _, _ = tf.nn.static_bidirectional_rnn(fw_cells, bw_cells, embedded_x, dtype=tf.float32)
+            outputs, _, _ = tf.nn.static_bidirectional_rnn(fw_cells, bw_cells, embedded_x, dtype=tf.float32)
+            #print(outputs)
+            ###----------attention mechanism
+            '''
+            attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, memory, memory_sequence_length=source_sequence_length)
+            cell = #multi-rnn cells
+            cell = tf.contrib.seq2seq.AttentionWrapper(
+                                                       cell,            
+                                                       attention_mechanism,
+                                                       attention_layer_size=num_units,                                             
+                                                       alignment_history=alignment_history,                                        
+                                                       output_attention=hparams.output_attention,                                  
+                                                       name="attention")
 
-        return outputs[-1]
+            '''
+            ###----------
+            output = outputs[-1]
+            output_normed = tf.contrib.layers.layer_norm(output)
+            #output_normed = tf.Print(output_normed, [output_normed], 'debug:output_normed')
+        return output_normed #outputs[-1]
 
     '''
     FLAGS contains parameters
@@ -86,21 +104,29 @@ class siamese:
         with tf.variable_scope("BiRNN") as scope:
 
             self.out1 = self.BiRNN(self.embedded_x1, self.dropout, FLAGS)
-            self.out1 = self.out1 / tf.norm(self.out1)
+            #self.out1 = self.out1 / tf.norm(self.out1)
+            #self.out1 = tf.contrib.layers.layer_norm(self.out1)
             #pdb.set_trace()
             self.out1 = tf.identity(self.out1, name="out1")
 
-            scope.reuse_variables()
+            #scope.reuse_variables()
             #pdb.set_trace()
 
-            self.out2 = self.BiRNN(self.embedded_x2, self.dropout, FLAGS)
-            self.out2 = self.out2 / tf.norm(self.out2)
+            self.out2 = self.BiRNN(self.embedded_x2, self.dropout, FLAGS) #self.out2 = self.out2 / tf.norm(self.out2)
+            #self.out2 = tf.contrib.layers.layer_norm(self.out2)
             self.out2 = tf.identity(self.out2, name="out2")
+
+            #self.o1_shape = tf.shape(self.out1)
 
         #distance
         with tf.name_scope("distance"):
-            self.distance = tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(self.out1,self.out2)),1,keep_dims=True))
-            self.distance = tf.reshape(self.distance, [-1], name="distance")
+            #self.distance = tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(self.out1,self.out2)),1,keep_dims=True))
+            #self.distance = tf.reshape(self.distance, [-1], name="distance")        
+            
+            self.distance = tf.reduce_sum(tf.abs(tf.subtract(self.out1, self.out2)), 1, keep_dims=True)
+            self.distance = tf.reshape(self.distance, [-1], name='distance')
+
+            #self.distance = tf.Print(self.distance, [self.distance, self.o1_shape, self.input_y], 'debug check distance of [d, o1.shape, y]')
 
         #loss
         with tf.name_scope("loss"):

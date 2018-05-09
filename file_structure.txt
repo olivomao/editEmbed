@@ -9,9 +9,39 @@ d(seq_x, seq_y)
 ...
 
 
+========[2] seq2seq_pair format
+## python command
+## [type:type_description]        #e.g. binary or DNA
+## [method:method_description]    #e.g. cgk
+## [label:val]                    #e.g. for cgk, RandSeq:0100110...
+...
+[seq_x]\t[seq_y transformed from seq_x]
+...
 
+========[3] seq2ids format
+## [src:src_path]
+## [type:type_description]    #e.g. binary or DNA
+## [blocklen:val]
+...
+id1 id2 etc
+...
 
-========[2] binary_seq_pair format
+========[4] vocab format
+diabled:
+## [type:type_description]    #e.g. binary or DNA
+## [blocklen:val]
+
+For example,
+
+<unk>
+<s>
+</s>
+00
+01
+10
+11
+
+========[3] binary_seq_pair format
 
 ## python command
 ...
@@ -21,7 +51,7 @@ d(seq_x, seq_y)
 
 
 
-========[3] cluster_center_fa format
+========[4] cluster_center_fa format
 
 >seq_id  gene=gene_id weight=wt
 seq in binary or ATCG
@@ -30,7 +60,7 @@ Note:
 - for simulated data, seq_id==gene_id. in practice, one gene_id may contain several seq_id (e.g. isoforms).
 - weight is normalized. this is useful when tot number of sampled seqs is fixed, and we sample seqs from clusters in a parallel way (to split clusters)
 
-========[4] sampled_seq_fa format
+========[5] sampled_seq_fa format
 
 >seq_id		tid=cluster_seq_id		gene=gene_id	weight=wt
 seq in binary or ATCG
@@ -39,7 +69,7 @@ Note:
 - for simulated data, cluster_seq_id==gene_id. in practice, one gene_id may contain several cluster_seq_id (e.g. isoforms).
 - one cluster_seq_id may have several sampled (noisy) seq_id
 
-========[5] pairwise_distance format:
+========[6] pairwise_distance format:
 
 - header:
   #seq_id1	seq_id2		type	(distance1 e.g. edit distance)		[(distance2) etc]
@@ -51,7 +81,7 @@ Note:
         1: different tid (different gene)
         2: different tid (same gene) ==> to be addressed when dealing with real data
 
-========[6] embed_fa format
+========[7] embed_fa format
 
 similar as fasta, just replace the seq with its embedding. e.g.
 
@@ -63,6 +93,6 @@ ATCG
 >seq [description]
 v1[,v2,...]
 
-========[7] loss_log format
+========[8] loss_log format
 
 #i 		training_loss		validation_loss

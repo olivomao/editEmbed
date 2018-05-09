@@ -4,21 +4,41 @@
 # model_label: describe model (e.g. tune_hidden_layer)
 # paramA_a_paramB_b...: describe different param combinations (e.g. hdsz_100...) 
 #                       in case no tuning, just use 'single_set'
+#
+# for seq2seq or siamese architecture training or eval, they can be distinguished by [model_label]. For example,
+#      - seq2seq architecture: [model_label]=seq2seq_model
+#      - siamese architecture: [model_label]=siamese_model
+#
 
 [root_dir]/[data_label]/train/data/cluster.fa
                        |     |    /sample.fa
                        |     |    /sample.dist
+                       |     |    /
+                       |     |    (for seq2seq learning)
+                       |     |    /seq2seq_cgk.txt (seq2seq pair format)
+                       |     |    /seq2seq_cgk_validation.txt (for validation)
                        |     /[model_label]/[paramA_a_paramB_b...]/ckpt_1
                        |                   |                      /ckpt_2
                        |                   |                      /...
                        |                   |                      /log.txt #train/validation loss
                        |                   |                      /log.png  
+                       |                   |                      /  
+                       |                   |                      /(for seq2seq learning)  
+                       |                   |                      /data_processed/s_i1.seq2ids, s_i2.seq2ids, vocab.txt
+                       |                   |                                     /s_i1_validation.seq2ids, s_i2_validation.seq2ids
                        |                   /config.txt
                        /eval//data/cluster.fa
                              |    /sample.fa
+                             |    /
+                             |    /(for seq2seq learning)
+                             |    /seq2seq_cgk.txt (seq2seq pair format)
+                             |    /
                              /[model_label]/[paramA_a_paramB_b...]/[ckpt_i]/sample.dist
-                                                                           /hist.norm_%d.png
-                                                                           /hist.norm_%d.txt
-                                                                           /roc.norm_%d.png
-                                                                           /roc.norm_%d.txt
-                                                                           /sample.embed.fa
+                                                                  |        /hist.norm_%d.png
+                                                                  |        /hist.norm_%d.txt
+                                                                  |        /roc.norm_%d.png
+                                                                  |        /roc.norm_%d.txt
+                                                                  |        /sample.embed.fa
+                                                                  |
+                                                                  |(for seq2seq learning)
+                                                                  /data_processed/s_i1_eval.seq2ids, s_i2_eval.seq2ids, vocab.txt
