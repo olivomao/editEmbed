@@ -96,3 +96,13 @@ v1[,v2,...]
 ========[8] loss_log format
 
 #i 		training_loss		validation_loss
+
+(for seq2seq)
+'#i\t'+\
+'train_avg_crosent_loss\t'+\
+'train_avg_hamming_loss\t'+\
+'train_avg_predicted_len\t'+\
+'train_avg_ref_len\t'+\
+'validation_hamming_loss\t'+\
+'validation_predicted_len\t'+\
+'validation_ref_len\n'

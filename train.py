@@ -174,6 +174,55 @@ def prepare_data_seq2seq(seq2seq_path,
     return s_i1_path, s_i2_path
 
 '''
+header in input_log will be read and parsed into col_names
+plot_itms is a list of group of col_names, shape=(n_subplots, n_curves). For example, plot_itms=[[a,b],[c,d]], a and b will be plotted in 1st subplot and c and d will be plotted in 2nd subplot
+'''
+def plot_log2(input_log, output_fig, plot_itms):
+
+    logPrint('[plot_log2] starts')
+
+    label_vals = {} #key: label from header val: list of vals
+    label_colidx = {} #key: label val: col index in header
+    colidx_label = {}
+    with open(input_log,'r') as fi:
+        header = fi.readline()
+        header = header[1:] #skip # sign
+        tokens = [t for t in header.split() if t!='']
+        for i in range(len(tokens)):
+            t = tokens[i]
+            label_vals[t] = []
+            label_colidx[t] = i
+            colidx_label[i] = t
+
+        pdb.set_trace()
+        for line in fi:
+            if line[0]=='#': continue
+            tokens = [convert_str_to_bool_int_float(t) for t in line.split() if t != '']
+            if len(tokens)==0: continue
+            for i in range(len(tokens)):
+                label_vals[colidx_label[i]].append(tokens[i])
+        pdb.set_trace()
+
+    n_subplots = len(plot_itms)
+
+    fig, axes = plt.subplots(n_subplots)
+    for i_plot in range(n_subplots):
+        for label in plot_itms[i_plot]:
+            x_vals = label_vals['i']
+            y_vals = label_vals[label]
+            axes[i_plot].plot(x_vals, y_vals, label=label)
+            axes[i_plot].legend()
+
+    #show/save all
+    plt.tight_layout()
+    plt.savefig(output_fig) #plt.show()
+    #pdb.set_trace()
+
+    logPrint('[plot_log2] ends. %s drawn'%output_fig)
+
+    return
+
+'''
 input is log file (i, train_loss, validation_loss)
 
 output is log fig (x-axis is i, y-axis contains 2 curves: train_loss and validation loss)
@@ -338,7 +387,12 @@ def train(FLAGS,
 
 class BatchedInput(
         collections.namedtuple("BatchedInput",
-                               ("initializer", "source", "target_input", "target_output", "source_sequence_length", "target_sequence_length"))):
+                               ("initializer", 
+                                "source",
+                                "target_input",
+                                "target_output",
+                                "source_sequence_length",
+                                "target_sequence_length"))):
     pass
 
 '''
@@ -349,35 +403,60 @@ In addition, [1]+tgt ==> tgt_input and tgt+[2] ==> tgt_output, and all cols padd
 
 output an iterator (src_ids, tgt_input, tgt_output, src_len/before padding, tgt_len/before padding) 
 
+The iterator can be used for "train" or "infer" purpose
+
 '''
-def prepare_minibatch_seq2seq(s_i1_path, s_i2_path, vocab_path, args):
+def prepare_minibatch_seq2seq(s_i1_path, 
+                              s_i2_path, 
+                              vocab_path, 
+                              args,
+                              purpose):
     
-    pdb.set_trace()
+    #pdb.set_trace()
     #used for words/blocks to ids
     table = tf.contrib.lookup.index_table_from_file(vocabulary_file=vocab_path,
                                                     default_value=0, #<unk> defined in vocab_path
                                                    )
     
     src_dataset = tf.data.TextLineDataset(s_i1_path)
-    src_dataset = src_dataset.filter(lambda line: tf.logical_and(tf.not_equal(tf.substr(line, 0, 1), "#"),
-                                                                 tf.not_equal(line, '')))
+    src_dataset = src_dataset.filter(lambda line: \
+                                     tf.logical_and(tf.not_equal(tf.substr(line, 0, 1), "#"),
+                                                    tf.not_equal(line, '')))
     tgt_dataset = tf.data.TextLineDataset(s_i2_path)
-    tgt_dataset = tgt_dataset.filter(lambda line: tf.logical_and(tf.not_equal(tf.substr(line, 0, 1), "#"),
-                                                                 tf.not_equal(line, '')))
+    tgt_dataset = tgt_dataset.filter(lambda line: \
+                                     tf.logical_and(tf.not_equal(tf.substr(line, 0, 1), "#"),
+                                                    tf.not_equal(line, '')))
     src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
 
     src_tgt_dataset = src_tgt_dataset.shuffle(args.output_buffer_size, args.random_seed)
     src_tgt_dataset = src_tgt_dataset.repeat()
 
-    src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt: (tf.string_split([src]).values, tf.string_split([tgt]).values)
+    src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt: \
+                                          (tf.string_split([src]).values, tf.string_split([tgt]).values)
                                          ).prefetch(args.output_buffer_size)
 
     #words/blocks to ids
-    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt: (tf.cast(table.lookup(src), tf.int32),tf.cast(table.lookup(tgt), tf.int32))).prefetch(args.output_buffer_size)
-    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt: (src, tf.concat(([1], tgt), 0), tf.concat((tgt, [2]), 0))).prefetch(args.output_buffer_size) #1: start of sentence and 2: end of sentence
-    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt_in, tgt_out: (src, tgt_in, tgt_out, tf.size(src), tf.size(tgt_in))).prefetch(args.output_buffer_size)
+    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt: \
+                                          (tf.cast(table.lookup(src), tf.int32),
+                                           tf.cast(table.lookup(tgt), tf.int32))).prefetch(args.output_buffer_size)
+    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt: \
+                                          (src, 
+                                           tf.concat(([1], tgt), 0),
+                                           tf.concat((tgt, [2]), 0))).prefetch(args.output_buffer_size) #1: start of sentence and 2: end of sentence
+    src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt_in, tgt_out: \
+                                          (src,
+                                           tgt_in, 
+                                           tgt_out, 
+                                           tf.size(src), 
+                                           tf.size(tgt_in))).prefetch(args.output_buffer_size)
 
-    src_tgt_dataset = src_tgt_dataset.padded_batch(args.batch_size,
+    if purpose == "train":
+        batch_size = args.batch_size
+    elif purpose == "infer":
+        #pdb.set_trace()
+        batch_size = args.n_clusters_validation
+
+    src_tgt_dataset = src_tgt_dataset.padded_batch(batch_size,
                                                    padded_shapes=(tf.TensorShape([None]),
                                                                   tf.TensorShape([None]),
                                                                   tf.TensorShape([None]),
@@ -434,6 +513,66 @@ def prepare_minibatch_seq2seq(s_i1_path, s_i2_path, vocab_path, args):
     return bi #BatchedInput
 
 '''
+input:
+    generated_ids shape=(batch size, max_time_1)
+    reference_ids shape=(batch size, max_time_2)
+output:
+    mean (averaged across batch size) hamming distance between per row of (generated_ids, reference_ids)
+    mean of ref seq lengths
+    mean of gen/predicted seq lengths
+
+For example, per row of (generated_ids, reference_ids) are:
+    ([3,4,5,6,6], [3,4,5,2]) here 1st list is not finished (stopped by '2' or </s>)
+                             1st list translated to 00 01 10 11 11 and 2nd list translated to 00 01 10 (blocklen=2, 3==>'00' because 0,1,2 correspond to unk, <s>, </s>) and their hamming distance is 4 
+'''
+def calc_validation_loss(generated_ids, reference_ids, blocklen):
+
+    def get_id(id):
+        if id<3: #<unk> <s> </s>
+            #print('id %d occurred'%id)
+            return 0
+        else:
+            return id-3
+                                            
+    def id2bseq(id):
+        return ("{0:0%db}"%blocklen).format(id)
+                                                    
+    def get_seq(list_ids):
+        return ''.join([id2bseq(get_id(list_ids[i])) for i in range(len(list_ids)) if list_ids[i]!=2])
+                                                            
+    generated_ids_seqs = [get_seq(generated_ids[r]) for r in range(len(generated_ids))]
+    #print(str(generated_ids_seqs))
+
+    reference_ids_seqs = [get_seq(reference_ids[r]) for r in range(len(reference_ids))]
+    #print(str(reference_ids_seqs))
+
+    def diff(seq1, seq2):
+        L1 = len(seq1)
+        L2 = len(seq2)
+        d = max(L1,L2)-min(L1,L2)
+        d += sum(c1 != c2 for c1, c2 in zip(seq1[:min(L1,L2)],seq2[:min(L1,L2)]))
+        return d
+
+    #print(diff('10011','0001'))
+
+    hamming_distances = [diff(generated_ids_seqs[r], reference_ids_seqs[r]) for r in range(len(generated_ids))]
+    #print(str(hamming_distances))
+
+    generated_seq_lengths = [len(generated_ids_seqs[r]) for r in range(len(generated_ids))]
+
+    reference_seq_lengths = [len(reference_ids_seqs[r]) for r in range(len(generated_ids))]
+
+    return np.mean(hamming_distances), np.mean(generated_seq_lengths), np.mean(reference_seq_lengths)
+
+# train_logits shape=(batch size, time, vocab)
+def logits2ids(train_logits):
+
+    #pdb.set_trace()
+    train_ids = np.argmax(train_logits, axis=2)
+
+    return train_ids
+
+'''
 train seq2seq architecture for one set of hyparam
 
 param_dic is a dic of {param:val} obtained from config file
@@ -485,49 +624,30 @@ def train_seq2seq(param_dic):
                                                 s_i2_path_vld)
 
 
-    print('TO IMPROVE TRAIN'); pdb.set_trace()
+    #========== prepare batched/shuffled data via tf.dataset
     batched_input   = prepare_minibatch_seq2seq(s_i1_path,
                                                s_i2_path,
                                                vocab_path,
-                                               args)
-    model = Model(args, batched_input)
-    model.build_graph()
+                                               args,
+                                               "train")
+
+    batched_input_infer = prepare_minibatch_seq2seq(s_i1_path_vld,
+                                                    s_i2_path_vld,
+                                                    vocab_path,
+                                                    args,
+                                                    "infer")
+
+    #========== build model/ computational graph
+    model = Model(args, batched_input, batched_input_infer)
     #pdb.set_trace()
     
-    '''
-    #check variables
-    print('DEBUG - CHECK VARIABLES'); pdb.set_trace()
+    #========== check trainable variables
     vs= tf.trainable_variables()
     print('There are %d trainable variables'%len(vs))
     for v in vs:
         print(v)
     
-    print('DEBUG - CHECK NODES'); pdb.set_trace()
-    with tf.Session() as sess:
-
-        sess.run(tf.tables_initializer())
-        sess.run(batched_input.initializer)
-        sess.run(tf.global_variables_initializer())
-
-        while True:
-            try:
-                #check nodes
-                #x = sess.run(batched_input.source)
-                #print(x)
-                #x = sess.run(model.embedding_encoder)
-                #print(x)
-                #check decoder outputs
-                #pdb.set_trace()
-                decoder_emb_input, decoder_outputs, sample_id, decoder_state, logits, loss = sess.run([model.decoder_emb_input, model.decoder_outputs, model.sample_id, model.decoder_state, model.logits, model.loss])
-                print(loss)
-                #pdb.set_trace()
-            except:
-                break
-    print('DEBUG ENDS'); pdb.set_trace()
-    '''
-    pdb.set_trace()
-    
-    #optimizer
+    #========== optimizer/ gradients operation
     global_step = tf.Variable(0, name="global_step", trainable=False)
 
     optimizer = tf.train.AdamOptimizer(args.learning_rate)
@@ -543,52 +663,136 @@ def train_seq2seq(param_dic):
             capped_gvs.append((grad, var))
 
     tr_op_set = optimizer.apply_gradients(capped_gvs, global_step=global_step)
-    pdb.set_trace()
 
-    #session
+    #========== session run
     with tf.Session() as sess:
 
         #logging
         saver = tf.train.Saver()
         logPath = args.model_dir_path+'/log.txt'
         logFigPath = args.model_dir_path+'/log.png' 
-        logFile = open(logPath, 'w'); logFile.write('#i\ttrain_loss\tvalidation_loss\n')
+        #'''
+        logFile = open(logPath, 'w');
+
+        logHeader = '#i\t'+\
+                    'train_avg_crosent_loss\t'+\
+                    'train_avg_hamming_loss\t'+\
+                    'train_avg_predicted_len\t'+\
+                    'train_avg_ref_len\t'+\
+                    'validation_hamming_loss\t'+\
+                    'validation_predicted_len\t'+\
+                    'validation_ref_len\n'
+        print(logHeader)
+        logFile.write(logHeader)
 
         #actual train
         sess.run(tf.tables_initializer())
         sess.run(batched_input.initializer)
+        sess.run(batched_input_infer.initializer)
         sess.run(tf.global_variables_initializer())
 
-        #if debug==True: sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-        
-        for i in range(args.n_batches):
+        #
+        i_batch = 0
+        period_to_dump_log = 5
+        period_to_save_model = 100
+        stat = {'train_avg_crosent_loss':[],
+                'train_avg_hamming_loss':[],
+                'train_avg_predicted_len':[],
+                'train_avg_ref_len':[]}
+        for ep in range(args.n_epoch):
+            for b in range(args.n_clusters/args.batch_size):
+                i_batch += 1
+                #print('ep=%d,batch=%d'%(ep,b))
+                
+                #train data
+                _, batch_step, batch_loss,\
+                train_logits, train_tgt_output = \
+                    sess.run([tr_op_set, global_step, model.loss,
+                              model.logits,
+                              batched_input.target_output])
 
-            #decoder_emb_input, decoder_outputs, sample_id, decoder_state, logits, loss = sess.run([model.decoder_emb_input, model.decoder_outputs, model.sample_id, model.decoder_state, model.logits, model.loss])
-            _, batch_step, batch_loss = sess.run([tr_op_set, global_step, model.loss])
- 
-            if np.isnan(batch_loss):
-                print('train loss %s is nan at i=%d'%(batch_loss, i))
-                if logFile.closed==False: logFile.close()
-                #plot_log(logPath, logFigPath)
-                return
+                train_ids = logits2ids(train_logits)
 
-            print('i=%d (batch_step=%d) , train_loss=%f'%(i,batch_step, batch_loss))
-
-            if i % 100 == 0:
-                try:
-                    print("save model i=%d"%i)
-                    saver.save(sess, args.model_dir_path+'ckpt_step_%d_loss_%s'%(i, str(batch_loss)))
-                except:
-                    print("saver.save exception at i=%d"%(i))
-                    if logFile.closed==False: logFile.close()
-                    #plot_log(logPath, logFigPath)
+                #pdb.set_trace()
+                train_hamming_loss,\
+                train_predicted_len,\
+                train_ref_len = \
+                    calc_validation_loss(train_ids,
+                                         train_tgt_output,
+                                         blocklen=args.blocklen)
+                
+                if np.isnan(batch_loss):
+                    print('batch_loss (train crosent loss) nan')
+                    logFile.close()
                     return
+
+                stat['train_avg_crosent_loss'].append(batch_loss)
+                stat['train_avg_hamming_loss'].append(train_hamming_loss)
+                stat['train_avg_predicted_len'].append(train_predicted_len)
+                stat['train_avg_ref_len'].append(train_ref_len)
+
+                #validation/test data
+                #if i_batch>50: pdb.set_trace()
+                if i_batch % period_to_dump_log == 0:
+                    infer_ids, infer_tgt_output = \
+                        sess.run([model.sample_id_infer, \
+                                  batched_input_infer.target_output])
+            
+                    validation_hamming_loss,\
+                    validation_predicted_length, \
+                    validation_ref_length = \
+                        calc_validation_loss(infer_ids, 
+                                             infer_tgt_output,
+                                             blocklen=args.blocklen)
+
+                    if np.isnan(validation_hamming_loss):
+                        print('validation hamming loss nan')
+                        logFile.close()
+                        return
+
+                    logMsg = ""
+                    logMsg += "%d\t"%i_batch
+                    #train - cross entropy loss
+                    logMsg += "%f\t"%np.mean(stat['train_avg_crosent_loss'])
+                    #train - hamming loss
+                    logMsg += "%f\t"%np.mean(stat['train_avg_hamming_loss'])
+                    logMsg += "%f\t"%np.mean(stat['train_avg_predicted_len'])
+                    logMsg += "%f\t"%np.mean(stat['train_avg_ref_len'])
+                    for k in stat.keys():
+                        stat[k]=[]
+
+                    logMsg += "%f\t"%validation_hamming_loss
+                    logMsg += "%f\t"%validation_predicted_length
+                    logMsg += "%f\t"%validation_ref_length
+                    print('ep=%d b=%d %s'%(ep, b, logMsg))
+
+                    logFile.write(logMsg+'\n')
+
+                if i_batch % period_to_save_model == 0:
+                    try:
+                        print("save model")
+                        saver.save(sess, \
+                            args.model_dir_path+\
+                            'ckpt_step_%d_loss_%s'%(i_batch,
+                            str(batch_loss)))
+                        print(logHeader)
+                    except:
+                        print("saver.save exception")
+                        if logFile.closed==False: logFile.close()
+                        return
 
         #pdb.set_trace()
         if logFile.closed==False: logFile.close()
         #pdb.set_trace()
-        #plot_log(logPath, logFigPath) 
-    print('TRAIN FINISH'); pdb.set_trace()
+        #'''
+        plot_log2(logPath, logFigPath,[['train_avg_crosent_loss',
+                                        'train_avg_hamming_loss',
+                                        'validation_hamming_loss'],
+                                       ['train_avg_predicted_len',
+                                        'train_avg_ref_len'],
+                                       ['validation_predicted_len',
+                                        'validation_ref_len']]) 
+        print('TRAIN FINISH'); pdb.set_trace()
     return
 
 
