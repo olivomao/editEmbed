@@ -115,6 +115,73 @@ def gen_seq2seq(args):
 
     return
 
+'''
+modified based on gen_seq2seq
+
+generate siamese_seq2seq dataset as defined in file_structure.txt
+'''
+def gen_siamese_seq2seq(args):
+
+    pdb.set_trace()
+
+    logLabel = '[gen_siamese_seq2seq]'
+
+    logPrint(logLabel)
+
+    pd, fn = parent_dir(args.output)
+    run_cmd('mkdir -p %s'%pd)
+
+    length = args.length
+    length2 = args.length2
+
+    #if True: #cgk
+    #    if args.seq_type==0:
+    #        L_R = 3*max(length, length2)*2
+    #    else:
+    #        L_R = 3*max(length, length2)*4
+    #    R = np.random.randint(0,2,L_R)
+
+    with open(args.output, 'w') as of:
+
+        #header
+        header = ""
+        header += '## args:' + str(args) + '\n'
+        header += '## ' + 'type:%s'%t2d[args.seq_type] + '\n'
+     
+        #if True: #cgk
+        #    header += '## CGK_RandSeq:%s\n'%' '.join(str(i) for i in list(R))
+        #    header += '## CGK_RandSeqLen:%d\n'%len(R)
+
+        header += "## si_1_seq\tsi_2_seq\tde_si\td_cgk\tdeviation_de_d_cgk\n"
+        of.write(header)
+
+        for i in range(args.num):
+
+            if args.seq_type==0:
+                si_1 = random_bin_string(length)
+                si_2 = random_bin_string(length2)
+            else:
+                si_1 = random_dna_string(length)
+                si_2 = random_dna_string(length2)
+
+            de_si = float(edit_dist(si_1, si_2))
+            d_cgk = float(proj_hamming_dist(si_1, si_2, args.seq_type, normalize=False)) 
+            deviation_de_d_cgk = d_cgk / de_si - 1
+
+            st = "%s\t"%si_1
+            st += "%s\t"%si_2
+            st += "%f\t"%de_si
+            st += "%f\t"%d_cgk
+            st += "%f\t"%deviation_de_d_cgk
+
+            of.write(st + "\n")
+
+    logPrint("%s %s written"%(logLabel, args.output))
+
+    return
+
+
+
 def sample_from_cluster(args):
 
     logPrint("[sample_from_cluster]")
@@ -249,7 +316,7 @@ def hamming(a,b):
 proj a --> a1, and b --> b1
 to use ham(a1, b1) to bound edit(a,b)
 '''
-def proj_hamming_dist(a, b, seq_type):
+def proj_hamming_dist(a, b, seq_type, normalize=True):
     #pdb.set_trace()
     N_iter = 10
     N = max(len(a), len(b))
@@ -269,7 +336,10 @@ def proj_hamming_dist(a, b, seq_type):
         if h_a1_b1<min_dist:
             min_dist = h_a1_b1
 
-    min_dist = float(min_dist)/(3*N)
+    if normalize==True:
+        min_dist = float(min_dist)/(3*N)
+    else:
+        min_dist = float(min_dist)
     #print(min_dist)
     return min_dist
 
@@ -620,6 +690,23 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         gen_seq2seq(args)
+
+    elif sys.argv[1]=='gen_siamese_seq2seq':
+
+        #pdb.set_trace()
+
+        s_parser = subs.add_parser('gen_siamese_seq2seq')
+
+        s_parser.add_argument('--output', type=str, help="output path of siamese_seq2seq in siamese_seq2seq format")
+        s_parser.add_argument('--seq_type', type=int, help="type of sequence. 0: binary, 1: ATCG")
+        s_parser.add_argument('--si_correlation_type', type=int, help="type of (si_1, si_2) correlation. 0: si_1 and si_2 independent")
+        s_parser.add_argument('--num', type=int, help="number of clusters")
+        s_parser.add_argument('--length', type=int, help="length of seq si_1")
+        s_parser.add_argument('--length2', type=int, help="length of seq si_2")
+
+        args = parser.parse_args()
+
+        gen_siamese_seq2seq(args)
 
 
     elif sys.argv[1]=='sample_from_cluster':

@@ -18,6 +18,18 @@ d(seq_x, seq_y)
 [seq_x]\t[seq_y transformed from seq_x]
 ...
 
+========[?] siamese_seq2seq format
+## python command
+## [type:type_description]    #e.g. binary or DNA
+## [label:val]                #e.g. RandSeq used for d_cgk calculation
+## si_1_seq	si_2_seq	de_si	d_cgk	deviation_de_d_cgk	
+
+note:
+- si_1_seq and si_2_seq can be rand pair or si_2_seq obtained by passing si_1_seq via an indel channel (related to si_correlation value)
+- de_si is absolute edit distance between si_1_seq and si_2_seq
+- d_cgk is hamming distance between cgk(si_1_seq) and cgk(si_2_seq), per si paire rand seq is differently generated
+- deviation_de_d_cgk = d_cgk/de_si - 1
+
 ========[3] seq2ids format
 ## [src:src_path]
 ## [type:type_description]    #e.g. binary or DNA

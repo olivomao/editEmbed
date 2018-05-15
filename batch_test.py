@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import pdb, sys, copy, multiprocessing, os
 
 from util import logPrint, run_cmd
-from train import train_seq2seq
+from train import train_seq2seq, train_siamese_seq2seq
 
 '''
 This .py file tries to make the train/eval more flexible and efficient
@@ -177,6 +177,58 @@ def batch_test_train_1job_seq2seq(input_args):
 
 
 '''
+modified based on batch_test_train_1job_seq2seq
+
+batch train one set of parameters (for siamese seq2seq architecture)
+
+param_dic: key: param_label and val: string of param val
+param_desc: some params in param_dic are one case of possible combinations, param_desc describes this
+            for example, param_desc=hdsz_100_learning_rate_0.001
+args: initial args passed to batch_test.py for control purpose 
+'''
+def batch_test_train_1job_siamese_seq2seq(input_args):
+
+    #pdb.set_trace()
+
+    param_dic, param_desc, args = input_args #packed to input_args for parallel purpose 
+    logLabel = '[train_1job_siamese_seq2seq_%s] '%param_desc
+
+    logPrint(logLabel+'Start')
+
+    root_dir = param_dic['root_dir']
+    data_label = param_dic['data_label']
+    model_label = param_dic['model_label']
+
+    data_dir = '%s/%s/train/data/'%(root_dir, data_label)
+    run_cmd('mkdir -p %s'%data_dir); logPrint('%s created'%data_dir)
+    model_dir = '%s/%s/train/%s/%s/'%(root_dir, data_label, model_label, param_desc)
+    run_cmd('mkdir -p %s'%model_dir); logPrint('%s created'%model_dir)
+
+    dst_config = '%s/%s/train/%s/config.txt'%(root_dir, data_label, model_label)
+    if os.path.exists(dst_config)==False:
+        run_cmd('cp %s %s'%(args.config_file, dst_config))
+
+    #sample_fa = '%s/sample.fa'%data_dir
+    #sample_dist = '%s/sample.dist'%data_dir
+    #seq2seq_pair = '%s/seq2seq_cgk.txt'%data_dir
+    siamese_seq2seq = '%s/siamese_seq2seq.txt'%data_dir
+
+    #to be passed to train_seq2seq function
+    #param_dic['seq2seq_pair_path'] = seq2seq_pair
+    param_dic['siamese_seq2seq'] = siamese_seq2seq
+    param_dic['model_dir_path'] = model_dir
+
+    if param_dic['n_clusters_validation']>0:
+        #pdb.set_trace()
+        param_dic['siamese_seq2seq_validation'] = '%s/siamese_seq2seq_validation.txt'%data_dir
+
+    train_siamese_seq2seq(param_dic) 
+
+    logPrint(logLabel+'End')
+
+    return
+
+'''
 Note:
 Parse a config_file (e.g. hdsz=100,200) into multiple training jobs (e.g. job of hdsz=100, job of hdsz=200)
 Parallelly train these jobs, and save model into locations specified in storage_structure
@@ -203,6 +255,8 @@ def batch_test_train(args):
             elif args.a==1: #seq2seq
                 #pdb.set_trace()
                 batch_test_train_1job_seq2seq((param_dic, param_desc, args))
+            elif args.a==2: #siamese seq2seq
+                batch_test_train_1job_siamese_seq2seq((param_dic, param_desc, args))
     else:
         args_list = [(param_dic, param_desc, args) for param_desc, param_dic in config_desc_dic_list]
         p = multiprocessing.Pool(nJobs)
@@ -210,6 +264,8 @@ def batch_test_train(args):
             p.map(batch_test_train_1job, args_list)
         elif args.a==1: #seq2seq
             p.map(batch_test_train_1job_seq2seq, args_list)
+        elif args.a==2: #siamese seq2seq
+            p.map(batch_test_train_1job_siamese_seq2seq, args_list)
 
     logPrint('[batch_test_train] End')
 
@@ -414,12 +470,13 @@ def batch_test_eval(args):
 '''
 Note:
 Parse a config_file,
-Generate data (cluster, sample, dist) for train or eval purpose of siamese architecture
+Generate data (cluster, sample, dist) for train or eval purpose of siamese (enc) architecture
               (seq2seq_cgk) for train of seq2seq architecture
+              (siamese_seq2seq) for train or validation of siamese seq2seq architecture
 Data stored into locations specified in storage_structure
 
 Note:
-- sample.dist is only calculated for train purpose of siamese architecture
+- sample.dist is only calculated for train purpose of siamese (enc) architecture
 '''
 
 def batch_test_data(args):
@@ -443,6 +500,10 @@ def batch_test_data(args):
     sample_dist = '%s/sample.dist'%data_dir
     
     seq2seq_pair = '%s/seq2seq_cgk.txt'%data_dir
+
+    #for siamese seq2seq
+    siamese_seq2seq = '%s/siamese_seq2seq.txt'%data_dir
+
     #---------- what kind of data to generate
     tasks = [int(d) for d in args.tasks.split(',') if d != '']
 
@@ -508,7 +569,31 @@ def batch_test_data(args):
             #pdb.set_trace()
             run_cmd(cmd)
 
-   
+    if 4 in tasks:
+        #siamese_seq2seq of siamese seq2seq architecture
+        cmd = 'python simulate_data.py gen_siamese_seq2seq '+\
+                        '--output %s '%siamese_seq2seq+\
+                        '--seq_type %s '%param_dic['seq_type']+\
+                        '--si_correlation_type %s '%param_dic['si_correlation_type']+\
+                        '--num %s '%param_dic['n_clusters']+\
+                        '--length %s '%param_dic['cluster_len']+\
+                        '--length2 %s '%param_dic['cluster_len2']
+        #pdb.set_trace()
+        run_cmd(cmd)
+
+        if args.purpose=='train' and param_dic['n_clusters_validation']>0:
+            #generate validation data
+            siamese_seq2seq_validation = '%s/siamese_seq2seq_validation.txt'%data_dir
+            cmd = 'python simulate_data.py gen_siamese_seq2seq '+\
+                            '--output %s '%siamese_seq2seq_validation+\
+                            '--seq_type %s '%param_dic['seq_type']+\
+                            '--si_correlation_type %s '%param_dic['si_correlation_type']+\
+                            '--num %s '%param_dic['n_clusters_validation']+\
+                            '--length %s '%param_dic['cluster_len']+\
+                            '--length2 %s '%param_dic['cluster_len2']
+            #pdb.set_trace()
+            run_cmd(cmd)
+
     logPrint('%s End'%(logLabel))
     #
     
@@ -528,7 +613,8 @@ if __name__ == "__main__":
         s_parser.add_argument('--config_file', type=str, help='config file (locations and params)')
         s_parser.add_argument('--purpose', type=str, help='train or eval; or validation (same location as train)')
         s_parser.add_argument('--tasks', type=str, help='tp1[,tp2...]; tp=0 cluster 1 sample 2 dist (for train purpose)'+\
-                                                                      'tp=3 seq2seq (cgk etc to be configured); order does not matter')
+                                                                      'tp=3 seq2seq (cgk etc to be configured)'+\
+                                                                      'tp=4 siamese_seq2seq; order does not matter')
         s_parser.add_argument('--N', type=int, default=1, help='number of processes to use; default 1')
 
         args = parser.parse_args()
@@ -542,7 +628,7 @@ if __name__ == "__main__":
         s_parser.add_argument('--config_file', type=str, help='config file (locations and params)')
         s_parser.add_argument('--N', type=int, default=1, help='number of processes to use; default 1')
 
-        s_parser.add_argument('--a', type=int, default=0, help='type of architecture, 0=siamese (default) and 1=seq2seq')
+        s_parser.add_argument('--a', type=int, default=0, help='type of architecture, 0=siamese (default) and 1=seq2seq and 2=siamese_seq2seq')
         args = parser.parse_args()
 
         batch_test_train(args)

@@ -3,7 +3,74 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.05.15
+
+summary: add data pipeline and train framework for siamese_seq2seq
+
+batch_test.py
+- add batch_test_train_1job_siamese_seq2seq
+
+edit_dist.py
+- use absolute edit distance (unnormalized)
+
+file_structure.txt
+- add siamese_seq2seq format
+
+simulate_data.py
+- gen_siamese_seq2seq
+- proj_hamming_dist add an option for normalize
+
+storage_structure.txt
+- add siamese_seq2seq storage
+
+train.py
+- add prepare_data_siamese_seq2seq
+- add SiameseSeq2Seq_BatchedInput
+- add train_siamese_seq2seq
+- add show_hist
+
+
+2018.05.11
+
+summary: add validation support for training seq2seq architecture
+
+file_structure.txt
+- add loss_log format for seq2seq training
+
+model_enc_dec.py
+- make the code cleaner and support both train and infer
+
+train.py
+- add plot_log2 for log dump during seq2seq training
+- modify prepare_minibatch_seq2seq to support infer batch size
+- add calc_validation_loss to calculate avg hamming loss b/w ref_seq_ids and predicted_seq_ids with shape=(batch size, time length) (they may have different time length)
+- refine the train_seq2seq loop
+
+2018.05.09
+
+batch_test:
+- train seq2seq
+
+file_structure:
+- add seq2seq_pair, seq2ids, vocab formats
+
+inference:
+- tried atention mechanism (currently disabled)
+
+simulate_data:
+- gen_seq2seq
+
+storage_structure
+- add seq2seq related files
+
+train
+- add seq2seq train related codes
+
+model_enc_dec.py
+- new seq2seq model
+
 2018.04.10
+
 
 summary: add validation loss. shuffle train and validation data. dump loss curves.
 

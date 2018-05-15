@@ -27,8 +27,8 @@ import pdb
 def edit_dist(a,b):
 	#return float(Levenshtein.distance(a,b))/(0.5*(len(a)+len(b)))
 	#return float(editdistance.eval(a,b))/(0.5*(len(a)+len(b)))
-	return float(editdistance.eval(a,b))/(len(a)+len(b))
-	#return editdistance.eval(a,b)
+	#return float(editdistance.eval(a,b))/(len(a)+len(b))
+	return editdistance.eval(a,b)
 
 def gapped_edit_dist(seq1_str, seq2_str):
 	

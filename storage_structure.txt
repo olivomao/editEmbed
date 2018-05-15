@@ -7,7 +7,7 @@
 #
 # for seq2seq or siamese architecture training or eval, they can be distinguished by [model_label]. For example,
 #      - seq2seq architecture: [model_label]=seq2seq_model
-#      - siamese architecture: [model_label]=siamese_model
+#      - siamese architecture: [model_label]=siamese_enc_model or siamese_seq2seq_model
 #
 
 [root_dir]/[data_label]/train/data/cluster.fa
@@ -17,6 +17,11 @@
                        |     |    (for seq2seq learning)
                        |     |    /seq2seq_cgk.txt (seq2seq pair format)
                        |     |    /seq2seq_cgk_validation.txt (for validation)
+                       |     |    /
+                       |     |    (for siamese seq2seq learning)
+		       |     |    /siamese_seq2seq.txt
+                       |     |    /siamese_seq2seq_validation.txt (for validation)
+                       |     |    /
                        |     /[model_label]/[paramA_a_paramB_b...]/ckpt_1
                        |                   |                      /ckpt_2
                        |                   |                      /...
@@ -25,7 +30,12 @@
                        |                   |                      /  
                        |                   |                      /(for seq2seq learning)  
                        |                   |                      /data_processed/s_i1.seq2ids, s_i2.seq2ids, vocab.txt
-                       |                   |                                     /s_i1_validation.seq2ids, s_i2_validation.seq2ids
+                       |                   |                      |              /s_i1_validation.seq2ids, s_i2_validation.seq2ids
+                       |                   |                      |  
+                       |                   |                      /(for siamese seq2seq learning)  
+                       |                   |                      /data_processed/s_i1.seq2ids, s_i2.seq2ids, de_si.txt, deviation_de_d_cgk.txt 
+                       |                   |                                     /vocab.txt
+                       |                   |                                     /s_i1_validation.seq2ids, s_i2_validation.seq2ids, de_si_validation.txt, deviation_de_d_cgk_validation.txt
                        |                   /config.txt
                        /eval//data/cluster.fa
                              |    /sample.fa
