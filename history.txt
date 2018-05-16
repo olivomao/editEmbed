@@ -5,6 +5,19 @@
 
 2018.05.15
 
+summary: add support of s_i_type into train pipeline
+
+storage_structure.txt
+- s_i_type
+
+train.py
+- prepare_data_siamese_seq2seq add s_i_type
+- SiameseSeq2Seq_BatchedInput add s_i_type
+- prepare_minibatch_seq2seq add s_i_type
+- train_siamese_seq2seq add s_i_type
+
+2018.05.15
+
 summary: add support for dependant (si_1, si_2) where si_2 is obtained from si_1 through an indel channel
 
 batch_test.py

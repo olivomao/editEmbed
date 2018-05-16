@@ -178,11 +178,13 @@ modified based on prepare_data_seq2seq
 
 input: siamese_seq2seq_path (can be train or validation)
        seq_type, blocklen
-output: s_i1_pah, s_i2_path, de_si, deviation_de_d_cgk
+output: s_i1_pah, s_i2_path, de_si, deviation_de_d_cgk, s_i_type
 
 in particular, (si_1, si_2) seq pair in siamese_seq2seq_path split, with blocks of x into s_i1_path
                                                                     with blocks of x' into s_i2_path
                de_si and deviation_de_d_cgk will be dumped to de_si, deviation_de_d_cgk directly
+               s_i_type indicates if (si_1, si_2) are independent or si_2 is derived by passing si_1
+               through an indel channel (setting can be known from header of siamese_seq2seq_path)
 '''
 def prepare_data_siamese_seq2seq(siamese_seq2seq_path,
                                  seq_type,
@@ -190,14 +192,16 @@ def prepare_data_siamese_seq2seq(siamese_seq2seq_path,
                                  s_i1_path,
                                  s_i2_path,
                                  de_si_path,
-                                 deviation_de_d_cgk_path):
+                                 deviation_de_d_cgk_path,
+                                 s_i_type_path):
     #pdb.set_trace()
 
     with open(siamese_seq2seq_path, 'r') as in_f, \
          open(s_i1_path, 'w') as out_f1, \
          open(s_i2_path, 'w') as out_f2, \
          open(de_si_path, 'w') as out_de, \
-         open(deviation_de_d_cgk_path, 'w') as out_dev:
+         open(deviation_de_d_cgk_path, 'w') as out_dev, \
+         open(s_i_type_path, 'w') as out_si_type:
 
         header =  '## src:%s\n'%siamese_seq2seq_path
         header +=  '## type:%s\n'%t2d[seq_type]
@@ -219,6 +223,7 @@ def prepare_data_siamese_seq2seq(siamese_seq2seq_path,
 
             de = tokens[2]
             deviation_de_d_cgk = tokens[4]
+            s_i_type = tokens[5]
 
             s_i1_blocks_str = get_seq2blocks(s_i1, seq_type, blocklen)
             s_i2_blocks_str = get_seq2blocks(s_i2, seq_type, blocklen)
@@ -228,14 +233,16 @@ def prepare_data_siamese_seq2seq(siamese_seq2seq_path,
 
             out_de.write(de+'\n')
             out_dev.write(deviation_de_d_cgk+'\n')
+            out_si_type.write(s_i_type+'\n')
 
         logPrint('%s written'%s_i1_path)
         logPrint('%s written'%s_i2_path)
         logPrint('%s written'%de_si_path)
         logPrint('%s written'%deviation_de_d_cgk_path)
+        logPrint('%s written'%s_i_type_path)
 
     #pdb.set_trace()
-    return s_i1_path, s_i2_path, de_si_path, deviation_de_d_cgk_path
+    return s_i1_path, s_i2_path, de_si_path, deviation_de_d_cgk_path, s_i_type_path
 
 
 '''
@@ -469,7 +476,8 @@ class SiameseSeq2Seq_BatchedInput(
                                 "source_sequence_length",
                                 "target_sequence_length",
                                 "de_si",
-                                "deviation_de_d_cgk"))):
+                                "deviation_de_d_cgk",
+                                "s_i_type"))):
     pass
 
 
@@ -479,7 +487,7 @@ Based on:
 - for seq2seq:
 s_i1_path (x, in block chunks), s_i2_path (transformed_x, in block chunks) and vocab_path (including <unk> <s> and </s>), 
 - for siamese seq2seq
-additionally, we've de_si_path, and deviation_de_d_cgk_path for metric evaluation purpose (we calculate them in advance to speedup run time efficienty)
+additionally, we've de_si_path, and deviation_de_d_cgk_path, and s_i_type_path for metric evaluation purpose (we calculate them in advance to speedup run time efficienty)
 
 We build a lookup table from vocab and then transform x and transformed_x from block chunks into ids.
 In addition, [1]+tgt ==> tgt_input and tgt+[2] ==> tgt_output, and all cols padded (w/ 2, eos) to have same length across batch.
@@ -487,7 +495,7 @@ In addition, [1]+tgt ==> tgt_input and tgt+[2] ==> tgt_output, and all cols padd
 - for seq2seq:
 output an iterator (src_ids, tgt_input, tgt_output, src_len/before padding, tgt_len/before padding) 
 - for siamese seq2seq:
-output an iterator (src_ids/s_i1, tgt_input/s_i2, tgt_output/dummy, src_len/before padding, tgt_len/before padding, de_si, deviation_de_d_cgk)
+output an iterator (src_ids/s_i1, tgt_input/s_i2, tgt_output/dummy, src_len/before padding, tgt_len/before padding, de_si, deviation_de_d_cgk, s_i_type)
 
 The iterator can be used for "train" or "infer" purpose
 
@@ -497,8 +505,9 @@ def prepare_minibatch_seq2seq(s_i1_path,
                               vocab_path, 
                               args,
                               purpose,
-                              de_si_path=None,
-                              deviation_de_d_cgk_path=None):
+                              de_si_path=None,#for siamese seq2seq
+                              deviation_de_d_cgk_path=None,
+                              s_i_type_path=None):
     
     '''
     open a textline dataset, remove comment and empty lines
@@ -524,7 +533,10 @@ def prepare_minibatch_seq2seq(s_i1_path,
        dev_dataset = open_dataset(deviation_de_d_cgk_path)
        dev_dataset = dev_dataset.map(lambda line: \
                                      tf.string_to_number(line, out_type=tf.float32))
-       src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset, de_si_dataset, dev_dataset))
+       s_i_type_dataset = open_dataset(s_i_type_path)
+       s_i_type_dataset = s_i_type_dataset.map(lambda line: \
+                                               tf.string_to_number(line, out_type=tf.int32))
+       src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset, de_si_dataset, dev_dataset, s_i_type_dataset))
     else:
        src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
 
@@ -559,31 +571,35 @@ def prepare_minibatch_seq2seq(s_i1_path,
                                               (tf.string_split([src]).values,
                                                tf.string_split([tgt]).values,
                                                de,
-                                               dv)).\
+                                               dv,
+                                               st)).\
                                              prefetch(args.output_buffer_size)
         #words/blocks to ids
-        src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt,de,dv: \
+        src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt,de,dv,st: \
                                               (tf.cast(table.lookup(src), tf.int32),
                                                tf.cast(table.lookup(tgt), tf.int32),
                                                de,
-                                               dv)).\
+                                               dv,
+                                               st)).\
                                              prefetch(args.output_buffer_size)
 
-        src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt, de, dv: \
+        src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt, de, dv, st: \
                                               (src, 
                                                tf.concat(([1], tgt), 0),
                                                tf.concat((tgt, [2]), 0),
                                                de,
-                                               dv)).\
+                                               dv,
+                                               st)).\
                                              prefetch(args.output_buffer_size) #1: start of sentence and 2: end of sentence
-        src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt_in, tgt_out, de, dv: \
+        src_tgt_dataset = src_tgt_dataset.map(lambda src, tgt_in, tgt_out, de, dv, st: \
                                               (src,
                                                tgt_in, 
                                                tgt_out, 
                                                tf.size(src), 
                                                tf.size(tgt_in),
                                                de,
-                                               dv)).prefetch(args.output_buffer_size)
+                                               dv,
+                                               st)).prefetch(args.output_buffer_size)
 
 
 
@@ -610,8 +626,9 @@ def prepare_minibatch_seq2seq(s_i1_path,
                                                                   tf.TensorShape([]),
                                                                   tf.TensorShape([]),
                                                                   tf.TensorShape([]),
+                                                                  tf.TensorShape([]),
                                                                   tf.TensorShape([])),
-                                                   padding_values=(2,2,2,0,0,0.0,0.0))
+                                                   padding_values=(2,2,2,0,0,0.0,0.0,0))
 
     iterator = src_tgt_dataset.make_initializable_iterator() #src_tgt_dataset.batch(args.batch_size).make_initializable_iterator()
     
@@ -629,7 +646,8 @@ def prepare_minibatch_seq2seq(s_i1_path,
          src_seq_len, \
          tgt_seq_len,\
          de,\
-         dv) = iterator.get_next()
+         dv,\
+         st) = iterator.get_next()
  
     #remove outer dimension
     #src_ids = tf.squeeze(src_ids, axis=[0]); print(src_ids)
@@ -656,7 +674,8 @@ def prepare_minibatch_seq2seq(s_i1_path,
                       source_sequence_length=src_seq_len,
                       target_sequence_length=tgt_seq_len,
                       de_si=de,
-                      deviation_de_d_cgk=dv)
+                      deviation_de_d_cgk=dv,
+                      s_i_type=st)
 
     return bi #BatchedInput
 
@@ -966,6 +985,9 @@ def train_siamese_seq2seq(param_dic):
     deviation_de_d_cgk_path  =  os.path.join(args.model_dir_path, \
                                              'data_processed', \
                                              'deviation_de_d_cgk.txt')
+    s_i_type_path = os.path.join(args.model_dir_path, \
+                                 'data_processed', \
+                                 's_i_type.txt')
     #pdb.set_trace()
     prepare_data_siamese_seq2seq(\
                                 args.siamese_seq2seq,
@@ -974,7 +996,8 @@ def train_siamese_seq2seq(param_dic):
                                 s_i1_path,
                                 s_i2_path,
                                 de_si_path,
-                                deviation_de_d_cgk_path)
+                                deviation_de_d_cgk_path,
+                                s_i_type_path)
 
     s_i1_path_validation =  os.path.join(args.model_dir_path,\
                                         'data_processed', \
@@ -988,6 +1011,9 @@ def train_siamese_seq2seq(param_dic):
     deviation_de_d_cgk_path_validation  =  os.path.join(args.model_dir_path, \
                                              'data_processed', \
                                              'deviation_de_d_cgk_validation.txt')
+    s_i_type_path_validation = os.path.join(args.model_dir_path, \
+                                 'data_processed', \
+                                 's_i_type_validation.txt')
     #pdb.set_trace()
     prepare_data_siamese_seq2seq(\
                                 args.siamese_seq2seq_validation,
@@ -996,7 +1022,8 @@ def train_siamese_seq2seq(param_dic):
                                 s_i1_path_validation,
                                 s_i2_path_validation,
                                 de_si_path_validation,
-                                deviation_de_d_cgk_path_validation)
+                                deviation_de_d_cgk_path_validation,
+                                s_i_type_path_validation)
     #pdb.set_trace()
     #========== prepare batched/shuffled data via tf.dataset
     batched_s_i1  = prepare_minibatch_seq2seq(s_i1_path,#only batched_s_i1.source and .source_length will be used
@@ -1005,14 +1032,16 @@ def train_siamese_seq2seq(param_dic):
                                               args,
                                               "train",#use args.batch_size
                                               de_si_path,
-                                              deviation_de_d_cgk_path)
+                                              deviation_de_d_cgk_path,
+                                              s_i_type_path)
     batched_s_i2  = prepare_minibatch_seq2seq(s_i2_path,#only batched_s_i2.source and .source_length will be used
                                               s_i2_path,#dummy
                                               vocab_path,
                                               args,
                                               "train",#use args.batch_size
                                               de_si_path,
-                                              deviation_de_d_cgk_path)
+                                              deviation_de_d_cgk_path,
+                                              s_i_type_path)
 
     batched_s_i1_vld =    prepare_minibatch_seq2seq(s_i1_path_validation,#only batched_s_i1_vld.source and .source_length will be used
                                                     s_i1_path_validation,#dummy
@@ -1020,14 +1049,16 @@ def train_siamese_seq2seq(param_dic):
                                                     args,
                                                     "infer",#use args.n_cluster_validation
                                                     de_si_path_validation,
-                                                    deviation_de_d_cgk_path_validation)
+                                                    deviation_de_d_cgk_path_validation,
+                                                    s_i_type_path_validation)
     batched_s_i2_vld =    prepare_minibatch_seq2seq(s_i2_path_validation,#only batched_s_i2_vld.source and .source_length will be used
                                                     s_i2_path_validation,#dummy
                                                     vocab_path,
                                                     args,
                                                     "infer",#use args.n_cluster_validation
                                                     de_si_path_validation,
-                                                    deviation_de_d_cgk_path_validation)
+                                                    deviation_de_d_cgk_path_validation,
+                                                    s_i_type_path_validation)
 
     #========== build model/ computational graph for siamese architecture
     with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
@@ -1112,11 +1143,14 @@ def train_siamese_seq2seq(param_dic):
                     a_i1_logits,\
                     a_i1_ids,\
                     de_si,\
-                    dev_de_d_cgk = sess.run([batched_s_i1.source, \
+                    dev_de_d_cgk, \
+                    s_i_type     = sess.run([batched_s_i1.source, \
                                              model_s_i1.logits_infer, \
                                              model_s_i1.sample_id_infer, \
                                              batched_s_i1.de_si, \
-                                             batched_s_i1.deviation_de_d_cgk])
+                                             batched_s_i1.deviation_de_d_cgk, \
+                                             batched_s_i1.s_i_type])
+
 
                     s_i2_src,\
                     a_i2_logits,\
