@@ -97,8 +97,8 @@ def batch_test_train_1job(input_args):
     run_cmd('mkdir -p %s'%model_dir); logPrint('%s created'%model_dir)
 
     dst_config = '%s/%s/train/%s/config.txt'%(root_dir, data_label, model_label)
-    if os.path.exists(dst_config)==False:
-        run_cmd('cp %s %s'%(args.config_file, dst_config))
+    #if os.path.exists(dst_config)==False:
+    run_cmd('cp %s %s'%(args.config_file, dst_config))
 
     sample_fa = '%s/sample.fa'%data_dir
     sample_dist = '%s/sample.dist'%data_dir
@@ -221,6 +221,8 @@ def batch_test_train_1job_siamese_seq2seq(input_args):
     if param_dic['n_clusters_validation']>0:
         #pdb.set_trace()
         param_dic['siamese_seq2seq_validation'] = '%s/siamese_seq2seq_validation.txt'%data_dir
+
+    param_dic['deviation_logger_path'] = '%s/deviation_log.txt'%model_dir  
 
     train_siamese_seq2seq(param_dic) 
 

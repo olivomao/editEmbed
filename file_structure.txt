@@ -118,3 +118,14 @@ v1[,v2,...]
 'validation_hamming_loss\t'+\
 'validation_predicted_len\t'+\
 'validation_ref_len\n'
+
+========[?] dev_log format
+
+- This is used for siamese seq2seq training and validation, 
+  to compare/draw histogram of deviation of d_H(a_i1, a_i2) from de(s_i1, s_i2)
+- dev_cgk = d_H(cgk(s_i1), cgk(s_i2))/de(s_i1, s_i2)-1
+  dev_nn  = d_H(nn(s_i1), nn(s_i2))/de(s_i1, s_i2)-1
+- s_i_type is used to tell if s_i1 and s_i2 are dependent
+  (e.g. s_i2 is obtained by passing s_i1 through an indel channel) or not
+
+#batch_index (could be repeated)	dev_cgk		dev_nn		s_i_type

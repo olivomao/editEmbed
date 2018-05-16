@@ -3,6 +3,33 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.05.16
+
+summary: plot dev or dH to log file (via logger.py)
+
+logger.py
+- new file to organize logging operations
+- class inheritance (abstract etc) added for future extension
+- plot figure also added
+
+batch_test.py
+- add deviation_logger_path
+
+file_structure.txt
+- add dev_log format
+
+model_enc_dec.py
+- print init model name
+
+storage_structure.txt
+- add dev_log format
+
+train.py
+- enable shuffle
+- add init model name
+- set dev_de_d_nn nan to 0
+
+
 2018.05.15
 
 summary: add support of s_i_type into train pipeline

@@ -18,7 +18,7 @@ import inference
 from tensorflow.python import debug as tf_debug
 from util import logPrint, convert_str_to_bool_int_float
 from model_enc_dec import Model
-
+from logger import DevLogger
 
 '''
 
@@ -540,7 +540,7 @@ def prepare_minibatch_seq2seq(s_i1_path,
     else:
        src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
 
-    #src_tgt_dataset = src_tgt_dataset.shuffle(args.output_buffer_size, args.random_seed)
+    src_tgt_dataset = src_tgt_dataset.shuffle(args.output_buffer_size, args.random_seed)
     src_tgt_dataset = src_tgt_dataset.repeat()
 
     if de_si_path is None:
@@ -567,7 +567,7 @@ def prepare_minibatch_seq2seq(s_i1_path,
                                                tf.size(tgt_in))).prefetch(args.output_buffer_size)
 
     else:#siamese seq2seq        
-        src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt,de,dv: \
+        src_tgt_dataset = src_tgt_dataset.map(lambda src,tgt,de,dv,st: \
                                               (tf.string_split([src]).values,
                                                tf.string_split([tgt]).values,
                                                de,
@@ -1064,47 +1064,32 @@ def train_siamese_seq2seq(param_dic):
     with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
         model_s_i1 = Model(args, 
                            batched_s_i1, #dummy
-                           batched_s_i1) #model_s_i1.logits_infer and .sample_id_infer will be used (for grad update)
+                           batched_s_i1,
+                           'model_s_i1') #model_s_i1.logits_infer and .sample_id_infer will be used (for grad update)
         model_s_i2 = Model(args,
                            batched_s_i2, #dummy
-                           batched_s_i2) #model_s_i2.logits_infer and .sample_id_infer will be used (for grad update)
+                           batched_s_i2,
+                           'model_s_i2') #model_s_i2.logits_infer and .sample_id_infer will be used (for grad update)
         
         model_s_i1_vld = Model(args,
                                batched_s_i1_vld, #dummy
-                               batched_s_i1_vld) #model_s_i1_vld.logits_infer and .sample_id_infer will be used (for validation)
+                               batched_s_i1_vld,
+                               'model_s_i1_vld') #model_s_i1_vld.logits_infer and .sample_id_infer will be used (for validation)
         model_s_i2_vld = Model(args,
                                batched_s_i2_vld, #dummy
-                               batched_s_i2_vld) #model_s_i2_vld.logits_infer and .sample_id_infer will be used (for validation)
+                               batched_s_i2_vld,
+                               'model_s_i2_vld') #model_s_i2_vld.logits_infer and .sample_id_infer will be used (for validation)
         #========== check trainable variables
         vs= tf.trainable_variables()
         print('There are %d trainable variables'%len(vs))
         for v in vs:
             print(v)
-        pdb.set_trace()
-
-        #========== test sess
-        '''
-        with tf.Session() as sess:
-
-            sess.run(tf.tables_initializer())
-            sess.run(batched_input.initializer)
-            sess.run(batched_input_infer.initializer)
-            sess.run(tf.global_variables_initializer())
-
-            for i in range(5):
-                s_i1, s_i2, de, dv = sess.run([batched_input.source,
-                                              batched_input.target_output,
-                                              batched_input.de_si,
-                                              batched_input.deviation_de_d_cgk])
-                s_i1_vld, s_i2_vld, de_vld, dv_vld \
-                                  = sess.run([batched_input_infer.source,
-                                              batched_input_infer.target_output,
-                                              batched_input_infer.de_si,
-                                              batched_input_infer.deviation_de_d_cgk])
-                pdb.set_trace()
-        '''
+        
         #========== training session
         with tf.Session() as sess:
+
+            ########## logger 
+            deviation_logger = DevLogger(args.deviation_logger_path)
             
             sess.run(tf.tables_initializer())
             sess.run(batched_s_i1.initializer)
@@ -1119,17 +1104,13 @@ def train_siamese_seq2seq(param_dic):
             #loaded model needs to be consistentwith created model here
             ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
             
-            #'''
-            pdb.set_trace()
-
             from tensorflow.python.tools.inspect_checkpoint \
                     import print_tensors_in_checkpoint_file
 
             print_tensors_in_checkpoint_file(file_name=ckpt, tensor_name='', all_tensors=False, all_tensor_names=True)
-            pdb.set_trace()
-            #'''
 
             saver.restore(sess, ckpt)
+            print('%s loaded'%ckpt)
             pdb.set_trace()
 
             ########## iteration
@@ -1138,6 +1119,7 @@ def train_siamese_seq2seq(param_dic):
                 for b in range(args.n_clusters/args.batch_size):
 
                     print('ep=%d b=%d'%(ep,b))
+                    #pdb.set_trace()
 
                     s_i1_src,\
                     a_i1_logits,\
@@ -1162,9 +1144,26 @@ def train_siamese_seq2seq(param_dic):
                                                      a_i2_ids,
                                                      args.blocklen)
                     dev_de_d_nn = d_H/de_si-1
+                    nan_indice = np.isnan(dev_de_d_nn)
+                    dev_de_d_nn[nan_indice] = 0
+
+                    print('transform dev to dH for debug');# pdb.set_trace()
+                    dev_de_d_nn = (dev_de_d_nn+1)*de_si
+                    dev_de_d_cgk = (dev_de_d_cgk+1)*de_si
+                    
                     #print('a_i1_shape=%s, a_i2_shape=%s'%(str(a_i1_ids.shape), str(a_i2_ids.shape)))
-                    show_hist(20, dev_de_d_cgk, dev_de_d_nn)
-                    pdb.set_trace()
+                    #pdb.set_trace()
+                    deviation_logger.add_log(batch_index=[b]*len(s_i1_src),
+                                             dev_cgk=dev_de_d_cgk,
+                                             dev_nn=dev_de_d_nn,
+                                             s_i_type=s_i_type)
+                    #show_hist(20, dev_de_d_cgk, dev_de_d_nn)
+                    #pdb.set_trace()
+
+                deviation_logger.close()
+                deviation_logger.plot()
+                pdb.set_trace()
+
 
 
 

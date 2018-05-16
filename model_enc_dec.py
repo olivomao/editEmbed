@@ -11,7 +11,10 @@ class Model(object):
     '''
     args: Namespace type e.g. args.num_encoder_layers=3
     '''
-    def __init__(self, args, iterator=None, iterator_infer=None):
+    def __init__(self, args, iterator=None, iterator_infer=None, model_name=''):
+
+        print('Initialize Model %s'%model_name)
+
         self.args = args
 
         self.iterator = iterator #BatchedInput
