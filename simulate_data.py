@@ -13,6 +13,7 @@ from Bio import SeqIO
 from util import *
 from edit_dist import *
 from inference import Predict, seq2nn
+from indel_channel import sim_seq_binary, sim_seq_dna
 
 def random_dna_string(length):
     letters ="ATCG"
@@ -119,20 +120,37 @@ def gen_seq2seq(args):
 modified based on gen_seq2seq
 
 generate siamese_seq2seq dataset as defined in file_structure.txt
-'''
-def gen_siamese_seq2seq(args):
 
-    pdb.set_trace()
+note:
+- if s_i_type==0: we generate num (s_i1, s_i2) independent pairs
+- if s_i_type==1: we firstly generate num (s_i1, s_i2) independent pairs
+                  
+                  we then generate num (s_i1, s_i2) dependent pairs where
+                  s_i2 is obtained by passing s_i1 through an indel channel
+                  with ins/del/sub rate
+
+'''
+def gen_siamese_seq2seq(output,
+                        seq_type,
+                        num,
+                        length,
+                        length2,#s_i_type==0
+                        rate_ins,#s_i_type==1
+                        rate_del,
+                        rate_sub,
+                        s_i_type=0
+                        ):
+
+    args_dic = locals()
+
+    #pdb.set_trace()
 
     logLabel = '[gen_siamese_seq2seq]'
 
     logPrint(logLabel)
 
-    pd, fn = parent_dir(args.output)
+    pd, fn = parent_dir(output)
     run_cmd('mkdir -p %s'%pd)
-
-    length = args.length
-    length2 = args.length2
 
     #if True: #cgk
     #    if args.seq_type==0:
@@ -141,38 +159,57 @@ def gen_siamese_seq2seq(args):
     #        L_R = 3*max(length, length2)*4
     #    R = np.random.randint(0,2,L_R)
 
-    with open(args.output, 'w') as of:
+    with open(output, 'w') as of:
 
         #header
         header = ""
-        header += '## args:' + str(args) + '\n'
-        header += '## ' + 'type:%s'%t2d[args.seq_type] + '\n'
+        header += '## args:' + str(args_dic) + '\n'
+        header += '## ' + 'type:%s'%t2d[seq_type] + '\n'
      
         #if True: #cgk
         #    header += '## CGK_RandSeq:%s\n'%' '.join(str(i) for i in list(R))
         #    header += '## CGK_RandSeqLen:%d\n'%len(R)
 
-        header += "## si_1_seq\tsi_2_seq\tde_si\td_cgk\tdeviation_de_d_cgk\n"
+        header += "## si_1_seq\tsi_2_seq\tde_si\td_cgk\tdeviation_de_d_cgk\ts_i_type\n"
         of.write(header)
 
-        for i in range(args.num):
+        if s_i_type==1:
+            NUM = 2*num
+        else:
+            NUM = num
 
-            if args.seq_type==0:
-                si_1 = random_bin_string(length)
-                si_2 = random_bin_string(length2)
-            else:
-                si_1 = random_dna_string(length)
-                si_2 = random_dna_string(length2)
+        for i in range(NUM):
 
+            if i<num: #(si_1, si_2) independent
+                if seq_type==0:
+                    si_1 = random_bin_string(length)
+                    si_2 = random_bin_string(length2)
+                else:
+                    si_1 = random_dna_string(length)
+                    si_2 = random_dna_string(length2)
+                curr_s_i_type = 0
+            else: #(si_1, si_2) dependent
+                if seq_type==0:
+                    si_1 = random_bin_string(length)
+                    si_2 = sim_seq_binary(si_1, rate_sub, rate_del, rate_ins)
+                else:
+                    si_1 = random_dna_string(length)
+                    si_2 = sim_seq_dna(si_1, rate_sub, rate_del, rate_ins)
+                curr_s_i_type = 1
+            
             de_si = float(edit_dist(si_1, si_2))
             d_cgk = float(proj_hamming_dist(si_1, si_2, args.seq_type, normalize=False)) 
-            deviation_de_d_cgk = d_cgk / de_si - 1
+            if de_si != 0:
+                deviation_de_d_cgk = d_cgk / de_si - 1
+            else:
+                deviation_de_d_cgk = 0 #si_1 and si_2 same, cgk shall be same, thus no deviation
 
             st = "%s\t"%si_1
             st += "%s\t"%si_2
             st += "%f\t"%de_si
             st += "%f\t"%d_cgk
             st += "%f\t"%deviation_de_d_cgk
+            st += "%d\t"%curr_s_i_type
 
             of.write(st + "\n")
 
@@ -702,12 +739,24 @@ if __name__ == "__main__":
         s_parser.add_argument('--si_correlation_type', type=int, help="type of (si_1, si_2) correlation. 0: si_1 and si_2 independent")
         s_parser.add_argument('--num', type=int, help="number of clusters")
         s_parser.add_argument('--length', type=int, help="length of seq si_1")
+        #si_correlation_type==0
         s_parser.add_argument('--length2', type=int, help="length of seq si_2")
+        #si_correlation_type==1
+        s_parser.add_argument('--rate_ins', type=float, help="insertion rate for si_2 from si_1")
+        s_parser.add_argument('--rate_del', type=float, help="deletion rate for si_2 from si_1")
+        s_parser.add_argument('--rate_sub', type=float, help="substituion rate for si_2 from si_1")
 
         args = parser.parse_args()
 
-        gen_siamese_seq2seq(args)
-
+        gen_siamese_seq2seq(args.output,
+                            args.seq_type,
+                            args.num,
+                            args.length,
+                            args.length2,#s_i_type==0
+                            args.rate_ins,#s_i_type==1
+                            args.rate_del,
+                            args.rate_sub,
+                            s_i_type=args.si_correlation_type)
 
     elif sys.argv[1]=='sample_from_cluster':
 

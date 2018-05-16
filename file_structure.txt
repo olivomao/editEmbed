@@ -22,7 +22,7 @@ d(seq_x, seq_y)
 ## python command
 ## [type:type_description]    #e.g. binary or DNA
 ## [label:val]                #e.g. RandSeq used for d_cgk calculation
-## si_1_seq	si_2_seq	de_si	d_cgk	deviation_de_d_cgk	
+## si_1_seq	si_2_seq	de_si	d_cgk	deviation_de_d_cgk    s_i_type	
 
 note:
 - si_1_seq and si_2_seq can be rand pair or si_2_seq obtained by passing si_1_seq via an indel channel (related to si_correlation value)

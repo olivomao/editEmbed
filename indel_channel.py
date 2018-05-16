@@ -63,6 +63,19 @@ def sim_seq(seq, profile):
         
     return sim
 
+
+def sim_seq_dna(seq, sub, dele, ins):
+
+    if(sub+ins+dele>=1):
+        print >> sys.stderr, "Total sub+ins+del error can not exceed 1!"
+        sys.exit(-1)
+
+    profile = [sub, sub+ins, sub+ins+dele, 1.]
+
+    return sim_seq(seq, profile)
+ 
+    
+
 '''
 simulate a binary seq through a long read channel
 

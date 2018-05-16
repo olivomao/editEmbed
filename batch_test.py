@@ -502,7 +502,7 @@ def batch_test_data(args):
     seq2seq_pair = '%s/seq2seq_cgk.txt'%data_dir
 
     #for siamese seq2seq
-    siamese_seq2seq = '%s/siamese_seq2seq.txt'%data_dir
+    #siamese_seq2seq = '%s/siamese_seq2seq.txt'%data_dir
 
     #---------- what kind of data to generate
     tasks = [int(d) for d in args.tasks.split(',') if d != '']
@@ -570,6 +570,10 @@ def batch_test_data(args):
             run_cmd(cmd)
 
     if 4 in tasks:
+
+
+        siamese_seq2seq = '%s/siamese_seq2seq.txt'%data_dir
+        
         #siamese_seq2seq of siamese seq2seq architecture
         cmd = 'python simulate_data.py gen_siamese_seq2seq '+\
                         '--output %s '%siamese_seq2seq+\
@@ -577,7 +581,10 @@ def batch_test_data(args):
                         '--si_correlation_type %s '%param_dic['si_correlation_type']+\
                         '--num %s '%param_dic['n_clusters']+\
                         '--length %s '%param_dic['cluster_len']+\
-                        '--length2 %s '%param_dic['cluster_len2']
+                        '--length2 %s '%param_dic['cluster_len2']+\
+                        '--rate_ins %s '%param_dic['rate_ins']+\
+                        '--rate_del %s '%param_dic['rate_del']+\
+                        '--rate_sub %s '%param_dic['rate_sub']
         #pdb.set_trace()
         run_cmd(cmd)
 
@@ -590,7 +597,10 @@ def batch_test_data(args):
                             '--si_correlation_type %s '%param_dic['si_correlation_type']+\
                             '--num %s '%param_dic['n_clusters_validation']+\
                             '--length %s '%param_dic['cluster_len']+\
-                            '--length2 %s '%param_dic['cluster_len2']
+                            '--length2 %s '%param_dic['cluster_len2']+\
+                            '--rate_ins %s '%param_dic['rate_ins']+\
+                            '--rate_del %s '%param_dic['rate_del']+\
+                            '--rate_sub %s '%param_dic['rate_sub']
             #pdb.set_trace()
             run_cmd(cmd)
 
