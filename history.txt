@@ -5,6 +5,23 @@
 
 2018.05.15
 
+summary: add support for dependant (si_1, si_2) where si_2 is obtained from si_1 through an indel channel
+
+batch_test.py
+- add ins/del/sub for batch_test_data
+
+file_structure.txt
+- add s_i_type for siamese_seq2seq format
+
+indel_channel.py
+- wrap sim_seq
+
+simulate_data.py
+- gen_siamese_seq2seq: explicit input args; 
+                       support both independent and dependent (indel channel) (si_1, si_2) pairs
+
+2018.05.15
+
 summary: add data pipeline and train framework for siamese_seq2seq
 
 batch_test.py
