@@ -3,6 +3,20 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+
+2018.05.17-05.18
+
+summary:
+
+model_enc_dec.py
+- attention mechanism (on-going)
+
+model_enc_dec_2.py
+- add this file to separate train/infer modes. parameters will be shared outside the model definition.
+
+train.py
+- train_seq2seq replace Model with Model2 (so we have model_train and model_infer to handle train and validation data separatedly) 
+
 2018.05.16
 
 summary: plot dev or dH to log file (via logger.py)

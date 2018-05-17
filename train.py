@@ -18,6 +18,7 @@ import inference
 from tensorflow.python import debug as tf_debug
 from util import logPrint, convert_str_to_bool_int_float
 from model_enc_dec import Model
+from model_enc_dec_2 import Model2
 from logger import DevLogger
 
 '''
@@ -803,23 +804,35 @@ def train_seq2seq(param_dic):
                                                     vocab_path,
                                                     args,
                                                     "infer")
+    #pdb.set_trace()
+    def check_variables(msg):
+        vs= tf.trainable_variables()
+        print('%s. There are %d trainable variables'%(msg, len(vs)))
+        for v in vs:
+            print(v)
 
     #========== build model/ computational graph
-    model = Model(args, batched_input, batched_input_infer)
     #pdb.set_trace()
-    
-    #========== check trainable variables
-    vs= tf.trainable_variables()
-    print('There are %d trainable variables'%len(vs))
-    for v in vs:
-        print(v)
-    
+    #model = Model(args, batched_input, batched_input_infer)
+    with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:
+        model_train = Model2(args, 
+                             batched_input,
+                             purpose="train",
+                             model_name="model_train")
+        check_variables('After model_train created')
+        model_infer = Model2(args,
+                             batched_input_infer,
+                             purpose="infer",
+                             model_name="model_infer")
+        check_variables('After model_infer created')
+     
     #========== optimizer/ gradients operation
     global_step = tf.Variable(0, name="global_step", trainable=False)
 
     optimizer = tf.train.AdamOptimizer(args.learning_rate)
 
-    grads_and_vars = optimizer.compute_gradients(model.loss)
+    #grads_and_vars = optimizer.compute_gradients(model.loss)
+    grads_and_vars = optimizer.compute_gradients(model_train.loss)
 
     capped_gvs = []
     for grad, var in grads_and_vars:
@@ -868,14 +881,25 @@ def train_seq2seq(param_dic):
                 'train_avg_ref_len':[]}
         for ep in range(args.n_epoch):
             for b in range(args.n_clusters/args.batch_size):
+                #pdb.set_trace()
                 i_batch += 1
                 #print('ep=%d,batch=%d'%(ep,b))
                 
                 #train data
-                _, batch_step, batch_loss,\
-                train_logits, train_tgt_output = \
-                    sess.run([tr_op_set, global_step, model.loss,
-                              model.logits,
+                #_, batch_step, batch_loss,\
+                #train_logits, train_tgt_output = \
+                #    sess.run([tr_op_set, global_step, model.loss,
+                #              model.logits,
+                #              batched_input.target_output])
+                _,\
+                batch_step,\
+                batch_loss,\
+                train_logits,\
+                train_tgt_output = \
+                    sess.run([tr_op_set,
+                              global_step, 
+                              model_train.loss,
+                              model_train.logits,
                               batched_input.target_output])
 
                 train_ids = logits2ids(train_logits)
@@ -902,10 +926,16 @@ def train_seq2seq(param_dic):
                 #validation/test data
                 #if i_batch>50: pdb.set_trace()
                 if i_batch % period_to_dump_log == 0:
-                    infer_ids, infer_tgt_output = \
-                        sess.run([model.sample_id_infer, \
+                    #pdb.set_trace()
+                    #infer_ids, infer_tgt_output = \
+                    #    sess.run([model.sample_id_infer, \
+                    #              batched_input_infer.target_output])
+                    infer_ids, \
+                    infer_tgt_output = \
+                        sess.run([model_infer.sample_id, \
                                   batched_input_infer.target_output])
             
+
                     _,\
                     validation_hamming_loss,\
                     validation_predicted_length, \
