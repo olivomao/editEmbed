@@ -89,6 +89,7 @@ class Model2(object):
                                              self.encoder_state,
                                              self.dec_cell,
                                              purpose, #"train",
+                                             self.args.en_attention,
                                              outer_layer=self.output_layer,#used at infer
                                              dtype=tf.float32)
 
@@ -285,6 +286,7 @@ class Model2(object):
                       encoder_state,
                       dec_cell,
                       purpose,
+                      en_attention,
                       outer_layer,#used at infer, None for train
                       dtype=tf.float32):
 
@@ -292,34 +294,25 @@ class Model2(object):
 
         with tf.variable_scope("decoder", dtype=dtype) as decoder_scope:
             
-            decoder_initial_state = encoder_state
-            
-            '''
             ### attention
-
-            num_units = args.dec_num_units
-            attention_states = encoder_outputs
-            attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units,
-                                                                    attention_states,
-                                                                    memory_sequence_length = iterator.source_sequence_length
-                                                                   )
-            dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell, 
-                                                           attention_mechanism,
-                                                           attention_layer_size=num_units,
-                                                           #alignment_history=(purpose=="infer"),
-                                                           name="attention")
-            if purpose=="train":
-                cbs = args.batch_size
-            elif purpose=="infer":
-                cbs = args.n_clusters_validation
+            if en_attention==1:
+                num_units = args.dec_num_units
+                attention_states = encoder_outputs
+                attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units,
+                                                                        attention_states,
+                                                                        memory_sequence_length = iterator.source_sequence_length
+                                                                       )
+                dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell, 
+                                                               attention_mechanism,
+                                                               attention_layer_size=num_units,
+                                                               #alignment_history=(purpose=="infer"),
+                                                               name="attention")
+                cbs = tf.shape(iterator.source)[0]
+                decoder_initial_state = dec_cell.zero_state(cbs,dtype).clone(cell_state=encoder_state)
+                #pdb.set_trace()
             else:
-                print("unexpected purpose: %s"%purpose)
-            #encoder_state = tf.Print(encoder_state, [cbs, tf.shape(encoder_state)], 'debug attention')
-            decoder_initial_state = dec_cell.zero_state(cbs,dtype).clone(cell_state=encoder_state)
-            pdb.set_trace()
-
+                decoder_initial_state = encoder_state
             ### attention
-            '''
 
             if purpose=="train":
 
