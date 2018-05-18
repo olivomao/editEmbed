@@ -3,10 +3,21 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.05.18
+
+summary: apply Model2 (separate train/infer; support BiLSTM and attention) for train_siamese_seq2seq
+
+logger.py
+- add exception handling in case dev_vals has nan or inf
+
+train.py
+- move check_variables outside to be used by train_siamese_seq2seq
+- in train_siamese_seq2seq, replace Model with Model2 (separate train/infer; support BiLSTM and attention)
+
 
 2018.05.17-05.18
 
-summary: add Model2 to separate train/infer data processing; bidirection support for Model2
+summary: add Model2 to separate train/infer data processing; bidirection and attention support for Model2
 
 model_enc_dec.py
 - attention mechanism (on-going)
@@ -25,6 +36,8 @@ model_enc_dec_2.py
 
   fwd_out_state and bwd_out_state need to be merged in terms of c and h
   in order to be compatible to decoder cell state input.
+- add attention option
+  unlike previous condition in model_enc_dec.py, both train/validation data is working
 
 train.py
 - train_seq2seq replace Model with Model2 (so we have model_train and model_infer to handle train and validation data separatedly) 

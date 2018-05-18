@@ -134,8 +134,12 @@ class DevLogger(Logger):
                     print('%s[%d] has no vals'%(dv_lab, k))
                     continue
 
-                h, v = np.histogram(dev_vals, bins=rg)
-                axes[i_subplot].plot(v[1:], h, marker='o',label='%s-%d'%(dv_lab,k))
+                try:
+                    h, v = np.histogram(dev_vals, bins=rg)
+                    axes[i_subplot].plot(v[1:], h, marker='o',label='%s-%d'%(dv_lab,k))
+                except:
+                    print('exception')
+                    pdb.set_trace()
             
             axes[i_subplot].legend()
 

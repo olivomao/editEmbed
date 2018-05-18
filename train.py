@@ -267,14 +267,14 @@ def plot_log2(input_log, output_fig, plot_itms):
             label_colidx[t] = i
             colidx_label[i] = t
 
-        pdb.set_trace()
+        #pdb.set_trace()
         for line in fi:
             if line[0]=='#': continue
             tokens = [convert_str_to_bool_int_float(t) for t in line.split() if t != '']
             if len(tokens)==0: continue
             for i in range(len(tokens)):
                 label_vals[colidx_label[i]].append(tokens[i])
-        pdb.set_trace()
+        #pdb.set_trace()
 
     n_subplots = len(plot_itms)
 
@@ -740,6 +740,13 @@ def logits2ids(train_logits):
 
     return train_ids
 
+
+def check_variables(msg):
+    vs= tf.trainable_variables()
+    print('%s. There are %d trainable variables'%(msg, len(vs)))
+    for v in vs:
+        print(v)
+
 '''
 train seq2seq architecture for one set of hyparam
 
@@ -805,11 +812,11 @@ def train_seq2seq(param_dic):
                                                     args,
                                                     "infer")
     #pdb.set_trace()
-    def check_variables(msg):
-        vs= tf.trainable_variables()
-        print('%s. There are %d trainable variables'%(msg, len(vs)))
-        for v in vs:
-            print(v)
+    #def check_variables(msg):
+    #    vs= tf.trainable_variables()
+    #    print('%s. There are %d trainable variables'%(msg, len(vs)))
+    #    for v in vs:
+    #        print(v)
 
     #========== build model/ computational graph
     #pdb.set_trace()
@@ -991,7 +998,7 @@ def train_seq2seq(param_dic):
                                         'train_avg_ref_len'],
                                        ['validation_predicted_len',
                                         'validation_ref_len']]) 
-        print('TRAIN FINISH'); pdb.set_trace()
+        print('TRAIN FINISH'); #pdb.set_trace()
     return
 
 '''
@@ -1092,6 +1099,7 @@ def train_siamese_seq2seq(param_dic):
 
     #========== build model/ computational graph for siamese architecture
     with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
+        '''
         model_s_i1 = Model(args, 
                            batched_s_i1, #dummy
                            batched_s_i1,
@@ -1109,12 +1117,27 @@ def train_siamese_seq2seq(param_dic):
                                batched_s_i2_vld, #dummy
                                batched_s_i2_vld,
                                'model_s_i2_vld') #model_s_i2_vld.logits_infer and .sample_id_infer will be used (for validation)
-        #========== check trainable variables
-        vs= tf.trainable_variables()
-        print('There are %d trainable variables'%len(vs))
-        for v in vs:
-            print(v)
+        '''
+        model_s_i1 = Model2(args, 
+                            batched_s_i1,
+                            purpose="infer",
+                            model_name='model_s_i1') #model_s_i1.logits and .sample_id will be used (for grad update)
+        model_s_i2 = Model2(args,
+                            batched_s_i2,
+                            purpose="infer",
+                            model_name='model_s_i2') #model_s_i2.logits and .sample_id will be used (for grad update)
         
+        model_s_i1_vld = Model2(args,
+                                batched_s_i1_vld,
+                                purpose="infer",
+                                model_name='model_s_i1_vld') #model_s_i1_vld.logits and .sample_id will be used (for validation)
+        model_s_i2_vld = Model2(args,
+                                batched_s_i2_vld,
+                                purpose="infer",
+                                model_name='model_s_i2_vld') #model_s_i2_vld.logits and .sample_id will be used (for validation)
+        #========== check trainable variables
+        check_variables('train siamese seq2seq - trainable variables') 
+
         #========== training session
         with tf.Session() as sess:
 
@@ -1132,7 +1155,8 @@ def train_siamese_seq2seq(param_dic):
             saver = tf.train.Saver()
 
             #loaded model needs to be consistentwith created model here
-            ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
+            #ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
+            ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K_TryNewModel/train/seq2seq_BiLSTM_Attention_tune_blocklen_embed_size/blocklen_5_embed_size_100/ckpt_step_2000_loss_4.18251'
             
             from tensorflow.python.tools.inspect_checkpoint \
                     import print_tensors_in_checkpoint_file
@@ -1149,26 +1173,26 @@ def train_siamese_seq2seq(param_dic):
                 for b in range(args.n_clusters/args.batch_size):
 
                     print('ep=%d b=%d'%(ep,b))
-                    #pdb.set_trace()
+                    #if b==1: pdb.set_trace()
 
                     s_i1_src,\
                     a_i1_logits,\
                     a_i1_ids,\
                     de_si,\
                     dev_de_d_cgk, \
-                    s_i_type     = sess.run([batched_s_i1.source, \
-                                             model_s_i1.logits_infer, \
-                                             model_s_i1.sample_id_infer, \
-                                             batched_s_i1.de_si, \
-                                             batched_s_i1.deviation_de_d_cgk, \
+                    s_i_type     = sess.run([batched_s_i1.source,
+                                             model_s_i1.logits, #_infer,
+                                             model_s_i1.sample_id, #_infer,
+                                             batched_s_i1.de_si,
+                                             batched_s_i1.deviation_de_d_cgk,
                                              batched_s_i1.s_i_type])
 
 
                     s_i2_src,\
                     a_i2_logits,\
-                    a_i2_ids     = sess.run([batched_s_i2.source, \
-                                             model_s_i2.logits_infer, \
-                                             model_s_i2.sample_id_infer])
+                    a_i2_ids     = sess.run([batched_s_i2.source,
+                                             model_s_i2.logits, #_infer,
+                                             model_s_i2.sample_id]) #_infer])
 
                     d_H,_,_,_ = calc_validation_loss(a_i1_ids,
                                                      a_i2_ids,
@@ -1176,8 +1200,11 @@ def train_siamese_seq2seq(param_dic):
                     dev_de_d_nn = d_H/de_si-1
                     nan_indice = np.isnan(dev_de_d_nn)
                     dev_de_d_nn[nan_indice] = 0
+                    inf_indice = np.isinf(dev_de_d_nn)
+                    dev_de_d_nn[inf_indice] = 0
 
                     print('transform dev to dH for debug');# pdb.set_trace()
+                    if b==16: pdb.set_trace()
                     dev_de_d_nn = (dev_de_d_nn+1)*de_si
                     dev_de_d_cgk = (dev_de_d_cgk+1)*de_si
                     
@@ -1190,7 +1217,7 @@ def train_siamese_seq2seq(param_dic):
                     #show_hist(20, dev_de_d_cgk, dev_de_d_nn)
                     #pdb.set_trace()
 
-                deviation_logger.close()
+                deviation_logger.close() #do for one epoch
                 deviation_logger.plot()
                 pdb.set_trace()
 
