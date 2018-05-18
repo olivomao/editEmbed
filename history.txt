@@ -6,13 +6,25 @@
 
 2018.05.17-05.18
 
-summary:
+summary: add Model2 to separate train/infer data processing; bidirection support for Model2
 
 model_enc_dec.py
 - attention mechanism (on-going)
+- add bidirectional support (to be deprecated/ encoder_state is not consistent with decoder cell/ remedied at model_enc_dec_2.py)
 
 model_enc_dec_2.py
 - add this file to separate train/infer modes. parameters will be shared outside the model definition.
+- add bi-directional support for encoder
+  note:
+  enc_num_layers will be applied to fwd and bwd;
+  per layer per fwd bwd layer size is half of enc_layer_size
+ 
+  bi_encoder_state = (fwd_out_state, bwd_out_state) where
+  per out_state = (c,h) (one layer) or ((c0,h0),(c1,h1)...) (multiple layers)
+  where c and h has shape (bs, hs)
+
+  fwd_out_state and bwd_out_state need to be merged in terms of c and h
+  in order to be compatible to decoder cell state input.
 
 train.py
 - train_seq2seq replace Model with Model2 (so we have model_train and model_infer to handle train and validation data separatedly) 

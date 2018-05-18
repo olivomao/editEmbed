@@ -29,11 +29,60 @@ class Model(object):
                                               args.embed_size,
                                               "embeddings",
                                               tf.float32)
+            ########## encode
+            #pdb.set_trace()
 
-            self.enc_cell = self.build_cell(args.enc_num_layers,
-                                            args.enc_num_units,
-                                            args.enc_forget_bias,
-                                            "enc_cell")
+            if hasattr(args, 'en_bidirection')==False or args.en_bidirection==0:
+                self.enc_cell = self.build_cell(args.enc_num_layers,
+                                                args.enc_num_units,
+                                                args.enc_forget_bias,
+                                                "enc_cell")
+                self.encoder_emb_input, \
+                self.encoder_outputs, \
+                self.encoder_state = self.build_encoder(self.iterator,
+                                                        self.embedding_encoder,
+                                                        self.enc_cell,
+                                                        "train",
+                                                        dtype=tf.float32)
+               
+                self.encoder_emb_input_infer, \
+                self.encoder_outputs_infer, \
+                self.encoder_state_infer = self.build_encoder(self.iterator_infer,
+                                                              self.embedding_encoder,#shared
+                                                              self.enc_cell,#shared
+                                                              "infer",
+                                                              dtype=tf.float32)
+            else: #bidirectional
+                self.enc_cell_fwd = self.build_cell(args.enc_num_layers,
+                                                    args.enc_num_units,
+                                                    args.enc_forget_bias,
+                                                    "enc_cell_fwd")
+
+                self.enc_cell_bwd = self.build_cell(args.enc_num_layers,
+                                                    args.enc_num_units,
+                                                    args.enc_forget_bias,
+                                                    "enc_cell_bwd")
+
+                self.encoder_emb_input, \
+                self.encoder_outputs, \
+                self.encoder_state = self.build_bidirection_encoder(self.iterator,
+                                                                    self.embedding_encoder,
+                                                                    self.enc_cell_fwd,
+                                                                    self.enc_cell_bwd,
+                                                                    args.enc_num_layers,
+                                                                    "train",
+                                                                    dtype=tf.float32)
+                self.encoder_emb_input_infer, \
+                self.encoder_outputs_infer, \
+                self.encoder_state_infer = self.build_bidirection_encoder(self.iterator_infer,
+                                                                          self.embedding_encoder,#shared
+                                                                          self.enc_cell_fwd,#shared
+                                                                          self.enc_cell_bwd,#shared
+                                                                          args.enc_num_layers,
+                                                                          "infer",
+                                                                          dtype=tf.float32)
+
+            ########## decode
 
             self.dec_cell = self.build_cell(args.dec_num_layers,
                                             args.dec_num_units,
@@ -44,22 +93,7 @@ class Model(object):
                                                   use_bias=False, \
                                                   name="decoder/output_projection")
             
-            self.encoder_emb_input, \
-            self.encoder_outputs, \
-            self.encoder_state = self.build_encoder(self.iterator,
-                                                    self.embedding_encoder,
-                                                    self.enc_cell,
-                                                    "train",
-                                                    dtype=tf.float32)
-           
-            self.encoder_emb_input_infer, \
-            self.encoder_outputs_infer, \
-            self.encoder_state_infer = self.build_encoder(self.iterator_infer,
-                                                          self.embedding_encoder,#shared
-                                                          self.enc_cell,#shared
-                                                          "infer",
-                                                          dtype=tf.float32)
-
+            pdb.set_trace()
             self.outputs, \
             self.sample_id, \
             self.final_context_state, \
@@ -183,6 +217,46 @@ class Model(object):
                                                                sequence_length=iterator.source_sequence_length) 
         return encoder_emb_inp, encoder_outputs, encoder_state
 
+    def build_bidirection_encoder(self, 
+                                  iterator,
+                                  embedding_encoder,
+                                  enc_cell_fwd, 
+                                  enc_cell_bwd,
+                                  num_bi_layers,
+                                  purpose,
+                                  dtype=tf.float32):
+
+        print('build bidirection encoder for %s'%purpose)
+
+        with tf.variable_scope("%s/bidirection_encoder"%purpose, dtype=dtype) as scope:
+
+            source = iterator.source #[batch_size, max_time], per element should be an id number transferred from a block of binary or dna sequence
+            
+            encoder_emb_inp = tf.nn.embedding_lookup(embedding_encoder, source) #[batch_size, max_time, num_units]
+
+            bi_encoder_outputs, \
+            bi_encoder_state = tf.nn.bidirectional_dynamic_rnn(  enc_cell_fwd,
+                                                                 enc_cell_bwd,
+                                                                 encoder_emb_inp,
+                                                                 dtype=dtype,
+                                                                 sequence_length=iterator.source_sequence_length) 
+
+            #bi_encoder_outputs = (output_fwd, output_bwd) where output_fwd/bwd is (bs, time, hs)
+            #so encoder_outputs is (bs, time, hs_fwd+hs_bwd)
+            encoder_outputs = tf.concat(bi_encoder_outputs, -1)
+
+            #bi_encoder_state is (output_state_fwd, output_state_bwd) where output_state_fwd/bwd is [(c_0,h_0), (c_1,h_1),..., (c_L-1, h_L-1)] (for L layers)
+            if num_bi_layers == 1:
+                encoder_state = bi_encoder_state
+            else:
+                encoder_state = []
+                for i in range(num_bi_layers):
+                    encoder_state.append(bi_encoder_state[0][i]) #fwd of layer i e.g. (fwd_c_i, fwd_h_i)
+                    encoder_state.append(bi_encoder_state[1][i]) #bwd of layer i e.g. (bwd_c_i, bwd_h_i)
+                encoder_state = tuple(encoder_state)
+
+        return encoder_emb_inp, encoder_outputs, encoder_state
+
     '''
     build an rnn cell (single or multi layers) for encoder or decoder
     '''
@@ -237,6 +311,33 @@ class Model(object):
         with tf.variable_scope("%s/decoder"%purpose, dtype=dtype) as decoder_scope:
             
             decoder_initial_state = encoder_state
+            
+            '''
+            ### attention
+
+            num_units = args.dec_num_units
+            attention_states = encoder_outputs
+            attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units,
+                                                                    attention_states,
+                                                                    memory_sequence_length = iterator.source_sequence_length
+                                                                   )
+            dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell, 
+                                                           attention_mechanism,
+                                                           attention_layer_size=num_units,
+                                                           #alignment_history=(purpose=="infer"),
+                                                           name="attention")
+            if purpose=="train":
+                cbs = args.batch_size
+            elif purpose=="infer":
+                cbs = args.n_clusters_validation
+            else:
+                print("unexpected purpose: %s"%purpose)
+            #encoder_state = tf.Print(encoder_state, [cbs, tf.shape(encoder_state)], 'debug attention')
+            decoder_initial_state = dec_cell.zero_state(cbs,dtype).clone(cell_state=encoder_state)
+            pdb.set_trace()
+
+            ### attention
+            '''
 
             if purpose=="train":
 
@@ -268,7 +369,8 @@ class Model(object):
             elif purpose=="infer":
             
                 #pdb.set_trace()
-                current_batch_size = args.batch_size #args.n_clusters_validation #tf.shape(iterator.source)[0] 
+                current_batch_size = tf.shape(iterator.source)[0] #args.n_clusters_validation #tf.shape(iterator.source)[0] args.batch_size # 
+                current_batch_size = tf.Print(current_batch_size, [current_batch_size], 'debug current batch_size')
                 start_tokens = tf.fill([current_batch_size], 1) #starting with <s> 
                 end_token = 2 #ending with </s>
                 

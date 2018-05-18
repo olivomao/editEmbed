@@ -47,13 +47,15 @@ class Model2(object):
                                                         dtype=tf.float32)
                
             else: #bidirectional
+                bi_enc_num_units = args.enc_num_units / 2
+
                 self.enc_cell_fwd = self.build_cell(args.enc_num_layers,
-                                                    args.enc_num_units,
+                                                    bi_enc_num_units,
                                                     args.enc_forget_bias,
                                                     "enc_cell_fwd")
 
                 self.enc_cell_bwd = self.build_cell(args.enc_num_layers,
-                                                    args.enc_num_units,
+                                                    bi_enc_num_units,
                                                     args.enc_forget_bias,
                                                     "enc_cell_bwd")
 
@@ -67,6 +69,7 @@ class Model2(object):
                                                                     dtype=tf.float32)
 
             ########## decode
+            #pdb.set_trace()
 
             self.dec_cell = self.build_cell(args.dec_num_layers,
                                             args.dec_num_units,
@@ -211,14 +214,28 @@ class Model2(object):
             encoder_outputs = tf.concat(bi_encoder_outputs, -1)
 
             #bi_encoder_state is (output_state_fwd, output_state_bwd) where output_state_fwd/bwd is [(c_0,h_0), (c_1,h_1),..., (c_L-1, h_L-1)] (for L layers)
+            #encoder_state = []
+            #for i in range(num_bi_layers):
+            #    bi_encoder_state[0].c, bi_encoder_state[1].c
+
             if num_bi_layers == 1:
-                encoder_state = bi_encoder_state
+
+                #pdb.set_trace()
+                c = tf.concat((bi_encoder_state[0].c, bi_encoder_state[1].c), 1)
+                h = tf.concat((bi_encoder_state[0].h, bi_encoder_state[1].h), 1)
+                encoder_state = tf.contrib.rnn.LSTMStateTuple(c,h)
+                #pdb.set_trace()
+
             else:
+                #pdb.set_trace()
                 encoder_state = []
                 for i in range(num_bi_layers):
-                    encoder_state.append(bi_encoder_state[0][i]) #fwd of layer i e.g. (fwd_c_i, fwd_h_i)
-                    encoder_state.append(bi_encoder_state[1][i]) #bwd of layer i e.g. (bwd_c_i, bwd_h_i)
+                    c = tf.concat((bi_encoder_state[0][i].c, bi_encoder_state[1][i].c), 1)
+                    h = tf.concat((bi_encoder_state[0][i].h, bi_encoder_state[1][i].h), 1)
+                    encoder_state.append(tf.contrib.rnn.LSTMStateTuple(c,h))
                 encoder_state = tuple(encoder_state)
+                #pdb.set_trace()
+                pass
 
         return encoder_emb_inp, encoder_outputs, encoder_state
 
