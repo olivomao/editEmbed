@@ -5,6 +5,22 @@
 
 2018.05.18
 
+summary: support deviation_logger for train and validation. wrapup some functions for reuse and RL purpose in train_siamese_seq2seq
+
+batch_test.py and storage_structure.txt
+- add deviation_logger_vld path (to dump log for validation data)
+
+train.py
+packed train_siamese_seq2seq code by following structure/functions:
+- SNA_ED_StateAction
+- state2action
+- Metrics 
+- calc_metrics
+ 
+
+
+2018.05.18
+
 summary: apply Model2 (separate train/infer; support BiLSTM and attention) for train_siamese_seq2seq
 
 logger.py

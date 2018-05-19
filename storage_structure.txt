@@ -37,8 +37,10 @@
                        |                   |                      |              /vocab.txt
                        |                   |                      |              /s_i1_validation.seq2ids, s_i2_validation.seq2ids, s_i_type_validation.txt,
                        |                   |                      |              /de_si_validation.txt, deviation_de_d_cgk_validation.txt
-                       |                   |                      /deviation_log.txt
+                       |                   |                      /deviation_log.txt     (for train data)
                        |                   |                      /deviation_log.txt.png
+                       |                   |                      /deviation_log_vld.txt (for validation data)
+                       |                   |                      /deviation_log_vld.txt.png
                        |                   /config.txt
                        /eval//data/cluster.fa
                              |    /sample.fa

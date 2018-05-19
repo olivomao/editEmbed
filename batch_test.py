@@ -223,6 +223,7 @@ def batch_test_train_1job_siamese_seq2seq(input_args):
         param_dic['siamese_seq2seq_validation'] = '%s/siamese_seq2seq_validation.txt'%data_dir
 
     param_dic['deviation_logger_path'] = '%s/deviation_log.txt'%model_dir  
+    param_dic['deviation_logger_vld_path'] = '%s/deviation_log_vld.txt'%model_dir
 
     train_siamese_seq2seq(param_dic) 
 

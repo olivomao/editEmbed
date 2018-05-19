@@ -1002,6 +1002,135 @@ def train_seq2seq(param_dic):
     return
 
 '''
+SNA ED - siamese network architecture - encoder decoder
+
+mainly, for grad update and performance evaluation purpose,
+stores the state (s_i1, s_i2)/input pair of sequences block ids
+                  per shape: (bs, time)
+       and action (a_i1_ids, a_i2_ids)/output predicted pair of sequences block ids
+                  per shape: (bs, time)
+       and action logits (a_i1_logits, a_i2_logits)
+                  per shape: (bs, time, vocab_size)
+
+additionally, for performance evaluation purpose,
+    de_si: shape of (bs,)
+           edit distance of (s_i1, s_i2)
+    dev_de_d_cgk: shape of (bs,)
+                  d_H(cgk(s_i1), cgk(s_i2))/de_si - 1
+    s_i_type: shape of (bs,) 
+              0 means (s_i1, s_i2) independent and 1 dependent
+
+'''
+class SNA_ED_StateAction(
+    collections.namedtuple("SNA_ED_StateAction",
+                           ("s_i1_src", 
+                            "a_i1_logits",
+                            "a_i1_ids",
+                            "s_i2_src",
+                            "a_i2_logits",
+                            "a_i2_ids",
+                            "de_si",
+                            "dev_de_d_cgk",
+                            "s_i_type"))):
+    pass
+
+'''
+input:
+    batched_s_i1 with shape (bs, time)
+    batched_s_i2 with shape (bs, time)
+    into model_s_i1 and model_s_i2 respectively
+output:
+    SNA_ED_StateAction object
+'''
+def state2action(sess,
+                 batched_s_i1,
+                 batched_s_i2,
+                 model_s_i1,
+                 model_s_i2):
+    s_i1_src,\
+    a_i1_logits,\
+    a_i1_ids,\
+    de_si,\
+    dev_de_d_cgk, \
+    s_i_type     = sess.run([batched_s_i1.source,
+                             model_s_i1.logits, #_infer,
+                             model_s_i1.sample_id, #_infer,
+                             batched_s_i1.de_si,
+                             batched_s_i1.deviation_de_d_cgk,
+                             batched_s_i1.s_i_type])
+
+
+    s_i2_src,\
+    a_i2_logits,\
+    a_i2_ids     = sess.run([batched_s_i2.source,
+                             model_s_i2.logits, #_infer,
+                             model_s_i2.sample_id]) #_infer])
+
+    res = SNA_ED_StateAction(s_i1_src=s_i1_src,
+                             a_i1_logits=a_i1_logits,
+                             a_i1_ids=a_i1_ids,
+                             s_i2_src=s_i2_src,
+                             a_i2_logits=a_i2_logits,
+                             a_i2_ids=a_i2_ids,
+                             de_si=de_si,
+                             dev_de_d_cgk=dev_de_d_cgk,
+                             s_i_type=s_i_type)
+
+    return res
+
+'''
+Containing metrics for performance evaluation.
+To be augmented in future
+
+In particular,
+
+dev_de_d_nn: d_H(nn(s_i1), nn(s_i2))/d_e(s_i1, s_i2)-1
+dev_de_d_cgk: d_H(cgk(s_i1), cgk(s_i2))/d_e(s_i1, s_i2)-1
+d_H_nn:  d_H(nn(s_i1), nn(s_i2))
+d_H_cgk:  d_H(cgk(s_i1), cgk(s_i2))
+'''
+class Metrics(
+    
+    collections.namedtuple("Metrics",
+                           ("dev_de_d_nn",
+                            "dev_de_d_cgk",
+                            "d_H_nn",
+                            "d_H_cgk"
+                           ))):
+    pass
+                  
+'''
+input: SNA_ED_StateAction object
+       blocklen
+output:
+       Metrics object - to be used for performance operation
+'''
+def calc_metrics(sna_ed_sa,
+                 blocklen):
+
+    d_H,_,_,_ = calc_validation_loss(sna_ed_sa.a_i1_ids,
+                                     sna_ed_sa.a_i2_ids,
+                                     blocklen)
+
+    dev_de_d_nn = d_H/sna_ed_sa.de_si-1
+    #post process illegal vals
+    nan_indice = np.isnan(dev_de_d_nn)
+    dev_de_d_nn[nan_indice] = 0
+    inf_indice = np.isinf(dev_de_d_nn)
+    dev_de_d_nn[inf_indice] = 0
+
+    d_H_nn = (dev_de_d_nn+1)*sna_ed_sa.de_si
+    dev_de_d_cgk = sna_ed_sa.dev_de_d_cgk
+    d_H_cgk = (dev_de_d_cgk+1)*sna_ed_sa.de_si
+
+    res = Metrics(dev_de_d_nn=dev_de_d_nn,
+                  dev_de_d_cgk=dev_de_d_cgk,
+                  d_H_nn=d_H_nn,
+                  d_H_cgk=d_H_cgk) 
+                    
+    return res
+
+'''
 modified based on train_seq2seq
 '''
 def train_siamese_seq2seq(param_dic):
@@ -1099,25 +1228,7 @@ def train_siamese_seq2seq(param_dic):
 
     #========== build model/ computational graph for siamese architecture
     with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
-        '''
-        model_s_i1 = Model(args, 
-                           batched_s_i1, #dummy
-                           batched_s_i1,
-                           'model_s_i1') #model_s_i1.logits_infer and .sample_id_infer will be used (for grad update)
-        model_s_i2 = Model(args,
-                           batched_s_i2, #dummy
-                           batched_s_i2,
-                           'model_s_i2') #model_s_i2.logits_infer and .sample_id_infer will be used (for grad update)
         
-        model_s_i1_vld = Model(args,
-                               batched_s_i1_vld, #dummy
-                               batched_s_i1_vld,
-                               'model_s_i1_vld') #model_s_i1_vld.logits_infer and .sample_id_infer will be used (for validation)
-        model_s_i2_vld = Model(args,
-                               batched_s_i2_vld, #dummy
-                               batched_s_i2_vld,
-                               'model_s_i2_vld') #model_s_i2_vld.logits_infer and .sample_id_infer will be used (for validation)
-        '''
         model_s_i1 = Model2(args, 
                             batched_s_i1,
                             purpose="infer",
@@ -1143,6 +1254,7 @@ def train_siamese_seq2seq(param_dic):
 
             ########## logger 
             deviation_logger = DevLogger(args.deviation_logger_path)
+            deviation_logger_vld = DevLogger(args.deviation_logger_vld_path)
             
             sess.run(tf.tables_initializer())
             sess.run(batched_s_i1.initializer)
@@ -1165,7 +1277,6 @@ def train_siamese_seq2seq(param_dic):
 
             saver.restore(sess, ckpt)
             print('%s loaded'%ckpt)
-            pdb.set_trace()
 
             ########## iteration
             for ep in range(args.n_epoch):
@@ -1175,54 +1286,43 @@ def train_siamese_seq2seq(param_dic):
                     print('ep=%d b=%d'%(ep,b))
                     #if b==1: pdb.set_trace()
 
-                    s_i1_src,\
-                    a_i1_logits,\
-                    a_i1_ids,\
-                    de_si,\
-                    dev_de_d_cgk, \
-                    s_i_type     = sess.run([batched_s_i1.source,
-                                             model_s_i1.logits, #_infer,
-                                             model_s_i1.sample_id, #_infer,
-                                             batched_s_i1.de_si,
-                                             batched_s_i1.deviation_de_d_cgk,
-                                             batched_s_i1.s_i_type])
-
-
-                    s_i2_src,\
-                    a_i2_logits,\
-                    a_i2_ids     = sess.run([batched_s_i2.source,
-                                             model_s_i2.logits, #_infer,
-                                             model_s_i2.sample_id]) #_infer])
-
-                    d_H,_,_,_ = calc_validation_loss(a_i1_ids,
-                                                     a_i2_ids,
-                                                     args.blocklen)
-                    dev_de_d_nn = d_H/de_si-1
-                    nan_indice = np.isnan(dev_de_d_nn)
-                    dev_de_d_nn[nan_indice] = 0
-                    inf_indice = np.isinf(dev_de_d_nn)
-                    dev_de_d_nn[inf_indice] = 0
-
-                    print('transform dev to dH for debug');# pdb.set_trace()
-                    if b==16: pdb.set_trace()
-                    dev_de_d_nn = (dev_de_d_nn+1)*de_si
-                    dev_de_d_cgk = (dev_de_d_cgk+1)*de_si
-                    
-                    #print('a_i1_shape=%s, a_i2_shape=%s'%(str(a_i1_ids.shape), str(a_i2_ids.shape)))
                     #pdb.set_trace()
-                    deviation_logger.add_log(batch_index=[b]*len(s_i1_src),
-                                             dev_cgk=dev_de_d_cgk,
-                                             dev_nn=dev_de_d_nn,
-                                             s_i_type=s_i_type)
-                    #show_hist(20, dev_de_d_cgk, dev_de_d_nn)
-                    #pdb.set_trace()
+                    sna_ed_sa = state2action(sess,
+                                             batched_s_i1,
+                                             batched_s_i2,
+                                             model_s_i1,
+                                             model_s_i2)
 
+                    metrics = calc_metrics(sna_ed_sa, args.blocklen)
+
+                    deviation_logger.add_log(
+                            batch_index=[b]*len(sna_ed_sa.s_i1_src),
+                            dev_cgk=metrics.d_H_cgk, #dev_de_d_cgk,
+                            dev_nn=metrics.d_H_nn, #dev_de_d_nn,
+                            s_i_type=sna_ed_sa.s_i_type)
+
+                print('plot dH distribution for 1-epoch train data')
                 deviation_logger.close() #do for one epoch
                 deviation_logger.plot()
+
+                if True: #check validation
+                    print('plot dH distribution for all validation data')
+                    sna_ed_sa_vld = state2action(sess,
+                                                 batched_s_i1_vld,
+                                                 batched_s_i2_vld,
+                                                 model_s_i1_vld,
+                                                 model_s_i2_vld)
+
+                    metrics_vld = calc_metrics(sna_ed_sa_vld, args.blocklen)
+                    deviation_logger_vld.add_log(
+                            batch_index=[b]*len(sna_ed_sa_vld.s_i1_src),
+                            dev_cgk=metrics_vld.d_H_cgk, #dev_de_d_cgk,
+                            dev_nn=metrics_vld.d_H_nn, #dev_de_d_nn,
+                            s_i_type=sna_ed_sa_vld.s_i_type)
+
+                    deviation_logger_vld.close()
+                    deviation_logger_vld.plot()
                 pdb.set_trace()
-
-
-
 
     return
 

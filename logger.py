@@ -115,7 +115,6 @@ class DevLogger(Logger):
                 dv_cgk[s].append(c)
                 dv_nn[s].append(n)
 
-        pdb.set_trace()
         fig, axes = plt.subplots(2)
 
         r_min = min_x; r_max = max_x
