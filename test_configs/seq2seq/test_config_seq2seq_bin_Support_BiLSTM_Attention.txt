@@ -1,0 +1,65 @@
+#---------- this is a test config file
+#for parameter combinations, use ';' to separate parameters (because for dist_tp_list, ',' also used)
+#used for seq2seq architecture
+
+#---------- location
+
+root_dir                		data_sim_data_type_bin_seq2seq/
+
+#data_label              		L50_TR10K_VLD2K_test_attention #case_bin
+data_label                              L50_TR10K_VLD2K_TryNewModel
+
+#model_label             		seq2seq_LSTM_attetion #init
+model_label                             seq2seq_BiLSTM_Attention_tune_blocklen_embed_size
+
+#---------- general
+
+seq_type                		0
+architecture				1	#0: siamese and 1: seq2seq
+
+#---------- data (clusters)
+
+n_clusters				10000   #test: 2000
+n_clusters_validation                   2000    #2000    #if -1 or not training (e.g. testing), validation data not generated for seq2seq
+cluster_len				50
+seq2seq_type				0	#0: cgk
+
+
+#---------- train (device)
+
+allow_soft_placement			True
+log_device_placement			True
+
+#---------- train
+
+learning_rate				0.001
+grad_max				5.0     #grad clipping
+
+output_buffer_size		        200000  #about batch_size * 1000
+random_seed				0	
+
+n_epoch                                 20
+batch_size				100
+n_batches                               2000     #n_epoch * train_samples / batch_size; currently dummy
+
+#---------- neural network model (input)
+
+blocklen                                2;5;10       #1
+embed_size				50;100;200;300
+
+#---------- neural network model (encoder)
+
+en_bidirection                          1 #1 use bi-directional rnn. per direction has enc_num_layers
+
+enc_num_layers                          1 #1
+enc_num_units                           150 #if en_bidirection==1, per fwd/bwd layer has half of enc_num_units
+enc_forget_bias                         0.5                        
+
+#---------- neural network model (decoder)
+
+en_attention				1
+
+dec_num_layers                          1 #1
+dec_num_units				150
+dec_forget_bias				0.5
+

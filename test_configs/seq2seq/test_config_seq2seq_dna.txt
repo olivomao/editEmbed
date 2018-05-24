@@ -1,0 +1,31 @@
+#---------- this is a test config file
+#for parameter combinations, use ';' to separate parameters (because for dist_tp_list, ',' also used)
+#used for seq2seq architecture
+
+#---------- location
+
+root_dir                		data_sim_data_type_dna_seq2seq/
+data_label              		case_dna
+model_label             		init
+
+#---------- general
+
+seq_type                		1
+architecture				1	#0: siamese and 1: seq2seq
+
+#---------- data (clusters)
+
+n_clusters				5
+cluster_len				3
+seq2seq_type				0	#0: cgk
+
+
+#---------- train
+
+blocklen				2
+
+output_buffer_size                      200000  #about batch_size * 1000
+random_seed                             0
+
+n_epoch                                 5
+batch_size                              100
