@@ -501,6 +501,35 @@ output an iterator (src_ids/s_i1, tgt_input/s_i2, tgt_output/dummy, src_len/befo
 The iterator can be used for "train" or "infer" purpose
 
 '''
+
+# a wrapper of prepare_minibatch_seq2seq for code reuse
+# ipt_files are of TfDatasetInputFiles
+# purpose "train" use args.batch_size "infer" use args.n_cluster_validation
+
+def prepare_minibatch_siamese_seq2seq(ipt_files, args, purpose):
+
+    batched_s_i1  = prepare_minibatch_seq2seq(
+                        ipt_files.s_i1_path,#only batched_s_i1.source and .source_length will be used
+                        ipt_files.s_i1_path,#dummy
+                        ipt_files.vocab_path,
+                        args,
+                        purpose,
+                        ipt_files.de_si_path,
+                        ipt_files.deviation_de_d_cgk_path,
+                        ipt_files.s_i_type_path)
+
+    batched_s_i2  = prepare_minibatch_seq2seq(
+                        ipt_files.s_i2_path,#only batched_s_i2.source and .source_length will be used
+                        ipt_files.s_i2_path,#dummy
+                        ipt_files.vocab_path,
+                        args,
+                        purpose,
+                        ipt_files.de_si_path,
+                        ipt_files.deviation_de_d_cgk_path,
+                        ipt_files.s_i_type_path)
+
+    return batched_s_i1, batched_s_i2
+
 def prepare_minibatch_seq2seq(s_i1_path, 
                               s_i2_path, 
                               vocab_path, 
@@ -1133,7 +1162,7 @@ def calc_metrics(sna_ed_sa,
 '''
 modified based on train_seq2seq
 '''
-def train_siamese_seq2seq(param_dic):
+def train_siamese_seq2seq_bkp(param_dic):
 
     for k,v in param_dic.items():
         param_dic[k] = convert_str_to_bool_int_float(v)
@@ -1248,6 +1277,7 @@ def train_siamese_seq2seq(param_dic):
                                 model_name='model_s_i2_vld') #model_s_i2_vld.logits and .sample_id will be used (for validation)
         #========== check trainable variables
         check_variables('train siamese seq2seq - trainable variables') 
+        pdb.set_trace()
 
         #========== training session
         with tf.Session() as sess:
@@ -1325,6 +1355,436 @@ def train_siamese_seq2seq(param_dic):
                 pdb.set_trace()
 
     return
+
+'''
+prepared file paths (at model_dir_path/data_processed)
+that are to be used by tf.dataset pipeline
+'''
+class TfDatasetInputFiles(
+        collections.namedtuple("TfDatasetInputFiles",
+            ("vocab_path",#for both training and validation batches
+             "s_i1_path",#for training batches
+             "s_i2_path",
+             "de_si_path", 
+             "deviation_de_d_cgk_path",
+             "s_i_type_path",
+            )
+            )):
+    pass
+
+def prepare_siamese_seq2seq_models(args,
+                                   batched_s_i1,
+                                   batched_s_i2,
+                                   batched_s_i1_vld,
+                                   batched_s_i2_vld):
+
+    #========== build model/ computational graph for siamese architecture
+    model_s_i1 = None
+    model_s_i2 = None
+    model_s_i1_vld = None
+    model_s_i2_vld = None
+
+    with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
+        
+        model_s_i1 = Model2(args, 
+                            batched_s_i1,
+                            purpose="infer",
+                            model_name='model_s_i1') #model_s_i1.logits and .sample_id will be used (for grad update)
+        model_s_i2 = Model2(args,
+                            batched_s_i2,
+                            purpose="infer",
+                            model_name='model_s_i2') #model_s_i2.logits and .sample_id will be used (for grad update)
+        
+        model_s_i1_vld = Model2(args,
+                                batched_s_i1_vld,
+                                purpose="infer",
+                                model_name='model_s_i1_vld') #model_s_i1_vld.logits and .sample_id will be used (for validation)
+        model_s_i2_vld = Model2(args,
+                                batched_s_i2_vld,
+                                purpose="infer",
+                                model_name='model_s_i2_vld') #model_s_i2_vld.logits and .sample_id will be used (for validation)
+
+    return model_s_i1, model_s_i2, model_s_i1_vld, model_s_i2_vld
+
+def prepare_tf_dataset_input_files(siamese_seq2seq, #input data for training
+                                   model_dir_path,
+                                   seq_type,
+                                   blocklen,
+                                   isValidationData=False
+                                   ):
+
+    if isValidationData==False:
+        vs = '' #empty validation str
+    else:
+        vs = '_validation' #this naming is specified in storage_structure.txt
+
+    run_cmd('mkdir -p %s'%os.path.join(model_dir_path, 'data_processed'))
+
+    vocab_path = os.path.join(model_dir_path, 'data_processed', 'vocab.txt')
+    prepare_vocab(vocab_path, seq_type, blocklen)
+
+    s_i1_path =  os.path.join(model_dir_path, 'data_processed', 's_i1%s.seq2ids'%vs)
+    s_i2_path =  os.path.join(model_dir_path, 'data_processed', 's_i2%s.seq2ids'%vs)
+    de_si_path  =  os.path.join(model_dir_path, 'data_processed', 'de_si%s.txt'%vs)
+    deviation_de_d_cgk_path  =  os.path.join(model_dir_path, \
+                                             'data_processed', \
+                                             'deviation_de_d_cgk%s.txt'%vs)
+    s_i_type_path = os.path.join(model_dir_path, \
+                                 'data_processed', \
+                                 's_i_type%s.txt'%vs)
+    #pdb.set_trace()
+    prepare_data_siamese_seq2seq(\
+                                siamese_seq2seq,
+                                seq_type,
+                                blocklen,
+                                s_i1_path,
+                                s_i2_path,
+                                de_si_path,
+                                deviation_de_d_cgk_path,
+                                s_i_type_path)
+
+    return TfDatasetInputFiles(
+             vocab_path=vocab_path,#for both training and validation batches
+             s_i1_path=s_i1_path,#for training batches
+             s_i2_path=s_i2_path,
+             de_si_path=de_si_path, 
+             deviation_de_d_cgk_path=deviation_de_d_cgk_path,
+             s_i_type_path=s_i_type_path,
+            ) 
+
+'''
+update==False:
+    augment acc_avg_r_per_batch
+
+update==True:
+    take mean of acc_avg_r_per_batch,
+    update u_i, s_i and model param theta_i in vs_dic
+    
+    reset acc_avg_r_per_batch
+
+- acc_avg_r_per_batch: list of avg_r_per_batch across different batches
+- beta: learning rate to update u_i, s_i and thus theta_i (i is index for variables)
+
+return vs_dic and acc_avg_r_per_batch
+'''
+def PGPE_update_theta(vs_dic, 
+                      sna_ed_sa, 
+                      metrics, 
+                      acc_avg_r_per_batch,
+                      sess,
+                      beta,
+                      update=False):
+
+    #print('PGPE_update')
+
+    rewards = - np.abs(metrics.dev_de_d_nn) 
+    avg_reward_per_batch = np.mean(rewards)
+    
+    if update==False:
+        acc_avg_r_per_batch.append(avg_reward_per_batch)
+        return vs_dic, acc_avg_r_per_batch
+
+    else:
+        #pdb.set_trace()
+
+        acc_avg_r_per_batch.append(avg_reward_per_batch)
+        avg_r = np.mean(acc_avg_r_per_batch)
+        acc_avg_r_per_batch = []
+
+        for v_i in vs_dic.keys():
+            u = vs_dic[v_i]['u']
+            s = vs_dic[v_i]['s']
+
+            v = v_i.eval() 
+
+            d_u = (v - u)/np.square(s)
+            ## for numerical stability
+            nan_indice = np.isnan(d_u)
+            d_u[nan_indice] = 0.0
+            inf_indice = np.isinf(d_u)
+            d_u[inf_indice] = 0.0
+
+            D_u = avg_r * d_u
+            u = u + beta*D_u
+            vs_dic[v_i]['u']=u
+
+            d_s = (np.square(v-u)-np.square(s))/(s*np.square(s))
+            ## for numerical stability
+            nan_indice = np.isnan(d_s)
+            d_s[nan_indice] = 0.0
+            inf_indice = np.isinf(d_s)
+            d_s[inf_indice] = 0.0
+
+            D_s = avg_r * d_s
+            s = s + beta*D_s
+            #s = max(0,s) #? negative deviation issue
+            #s[s<0]=0
+            pdb.set_trace()
+            s = np.abs(s)
+            vs_dic[v_i]['s']=s
+
+            new_v = np.random.normal(loc=vs_dic[v_i]['u'], scale=vs_dic[v_i]['s'])
+            v_i.load(new_v, sess)
+        
+    #pdb.set_trace()
+
+    return vs_dic, acc_avg_r_per_batch
+
+
+'''
+rand init weights into the model
+'''
+def PGPE_rand_init(sess):
+
+    print('PGPE_rand_init')
+
+    vs_dic = {} #key: model trainable v, and val:{u:u_v, s:sigma_v}
+
+    #pdb.set_trace()
+
+    for v in tf.trainable_variables():
+        vs_dic[v] = {}
+        sp = v.eval().shape
+        #vs_dic[v]['u']=np.random.uniform(-1.0, 1.0, size=sp) #u_v, v is with shape (?,?)
+        vs_dic[v]['u']=v.eval()
+        vs_dic[v]['s']=np.random.uniform(0, 0.01, size=sp) #sigma_v
+        #for theta update purpose
+        #vs_dic[v]['acc_r']=0.0
+        #vs_dic[v]['acc_counter']=0
+
+        new_v = np.random.normal(loc=vs_dic[v]['u'], scale=vs_dic[v]['s'])
+        
+        '''
+        print(v)
+        print(v.eval())
+
+        print('u')
+        print(vs_dic[v]['u'])
+
+        print('s')
+        print(vs_dic[v]['s'])
+
+        print('new_v')
+        print(new_v)
+        '''
+
+        v.load(new_v, sess)
+        '''
+        print('v after loading new_v')
+        print(v.eval())
+        #pdb.set_trace()
+        '''
+    return vs_dic
+
+'''
+initialize the model depending on RL_method and init_model_option
+
+if RL_method==PGPE and init_model_option == 1,
+  vc_dic is returned with key=i-th Variable theta(i) ~ N(u(i), sigma(i))
+                          val=[u(i), sigma(i)] 
+'''
+def model_initialization(RL_method,
+                         init_model_option,
+                         sess,
+                         saver):
+
+    if RL_method == 0:#simply load or rand init a model
+        return None
+    elif RL_method == 1:#REINFORCE algo
+        return None
+    elif RL_method == 2:#PGPE algo
+        if init_model_option == 0:#load a pretrained model
+            #pdb.set_trace()
+            load_pretrained_seq2seq(sess, saver)
+            return None
+        elif init_model_option == 1:#pre-load thea, and rand initialization theta ~ N(u=preload theta, sigma ~ U[0, 0.001])
+            load_pretrained_seq2seq(sess, saver)
+            vs_dic = PGPE_rand_init(sess)
+            return vs_dic
+
+'''
+use saver to load a pretrained seq2seq model to sess
+
+the pretrained model and current sess model should be compatible
+'''
+def load_pretrained_seq2seq(sess,
+                            saver):
+
+    #loaded model needs to be consistentwith created model here
+
+    #ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
+    ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K_TryNewModel/train/seq2seq_BiLSTM_Attention_tune_blocklen_embed_size/blocklen_5_embed_size_100/ckpt_step_2000_loss_4.18251'
+        
+    from tensorflow.python.tools.inspect_checkpoint \
+            import print_tensors_in_checkpoint_file
+
+    print_tensors_in_checkpoint_file(\
+            file_name=ckpt, \
+            tensor_name='', \
+            all_tensors=False, \
+            all_tensor_names=True)
+
+    saver.restore(sess, ckpt)
+    print('%s loaded'%ckpt)
+    return
+
+'''
+modified to:
+    - incorporate RL (e.g. REINFORCE or PGPE)
+    - make blocks more modular
+'''
+def train_siamese_seq2seq(param_dic):
+
+    #param_dic to args
+    for k,v in param_dic.items():
+        param_dic[k] = convert_str_to_bool_int_float(v)
+    args = Namespace(**param_dic)
+
+    #==========process data for tf data pipeline
+    ipt_files = prepare_tf_dataset_input_files(
+                                   args.siamese_seq2seq, #input data for training
+                                   args.model_dir_path,
+                                   args.seq_type,
+                                   args.blocklen,
+                                   isValidationData=False
+                                   )
+
+    ipt_files_vld = prepare_tf_dataset_input_files(
+                                   args.siamese_seq2seq_validation, #input data for training
+                                   args.model_dir_path,
+                                   args.seq_type,
+                                   args.blocklen,
+                                   isValidationData=True
+                                   )
+
+    #pdb.set_trace()
+    #========== prepare batched/shuffled data via tf.dataset
+    #pdb.set_trace()
+    batched_s_i1, \
+    batched_s_i2 = prepare_minibatch_siamese_seq2seq(ipt_files, args, "train")
+
+    batched_s_i1_vld, \
+    batched_s_i2_vld = prepare_minibatch_siamese_seq2seq(ipt_files_vld, args, "infer")
+
+    model_s_i1, model_s_i2,\
+    model_s_i1_vld, model_s_i2_vld = \
+    prepare_siamese_seq2seq_models(args,
+                                   batched_s_i1,
+                                   batched_s_i2,
+                                   batched_s_i1_vld,
+                                   batched_s_i2_vld)
+
+    #========== check trainable variables
+    check_variables('train siamese seq2seq - trainable variables') 
+    #pdb.set_trace()
+
+    #========== training session
+    with tf.Session() as sess:
+
+        ########## logger 
+        deviation_logger = DevLogger(args.deviation_logger_path)
+        deviation_logger_vld = DevLogger(args.deviation_logger_vld_path)
+
+        ########## saver
+        saver = tf.train.Saver()
+
+        ########## initialization
+        sess.run(tf.tables_initializer())
+        sess.run(batched_s_i1.initializer)
+        sess.run(batched_s_i2.initializer)
+        sess.run(batched_s_i1_vld.initializer)
+        sess.run(batched_s_i2_vld.initializer)
+        sess.run(tf.global_variables_initializer())
+
+        #if RL_method==2(PGPE) and init_model_option==1(pre-load+rand init)
+        #    vs_dic is {theta(t):[u(t), sigma(t)]}
+        #otherwise,
+        #    vs_dic is None
+        vs_dic = model_initialization(args.RL_method,
+                             args.init_model_option,
+                             sess,
+                             saver)
+        pdb.set_trace()
+
+        if args.RL_method==2: #PGPE
+            acc_avg_r_per_batch = []
+            beta = args.beta
+            PGPE_update_interval = 10 #number of batches after which to update policy
+            b_cnt = 0
+        #pdb.set_trace()
+                 
+        ########## iteration
+        for ep in range(args.n_epoch):
+
+            for b in range(args.n_clusters/args.batch_size):
+
+                #pdb.set_trace()
+                sna_ed_sa = state2action(sess,
+                                         batched_s_i1,
+                                         batched_s_i2,
+                                         model_s_i1,
+                                         model_s_i2)
+
+                metrics = calc_metrics(sna_ed_sa, args.blocklen)
+                
+                print('ep=%d b=%d mean dev cgk=%f, nn=%f'%(ep,b,
+                       np.mean(metrics.dev_de_d_cgk),
+                       np.mean(metrics.dev_de_d_nn)))
+                
+                if args.RL_method==2: #PGPE
+                    #pdb.set_trace()
+
+                    b_cnt += 1
+                    if b_cnt % PGPE_update_interval == 0:
+                        update = True
+                        b_cnt = 0
+                    else:
+                        update = False
+
+                    if update==True:
+                        print('current b_cnt=%d update'%b_cnt)
+
+                    #pdb.set_trace()
+                    vs_dic,\
+                    acc_avg_r_per_batch = PGPE_update_theta(vs_dic, 
+                                               sna_ed_sa,
+                                               metrics,
+                                               acc_avg_r_per_batch,
+                                               sess,
+                                               beta,
+                                               update) 
+
+                #deviation_logger.add_log(
+                #        batch_index=[b]*len(sna_ed_sa.s_i1_src),
+                #        dev_cgk=metrics.d_H_cgk, #dev_de_d_cgk,
+                #        dev_nn=metrics.d_H_nn, #dev_de_d_nn,
+                #        s_i_type=sna_ed_sa.s_i_type)
+
+            #print('plot dH distribution for 1-epoch train data')
+            #deviation_logger.close() #do for one epoch
+            #deviation_logger.plot()
+
+            if False: #check validation
+                print('plot dH distribution for all validation data')
+                sna_ed_sa_vld = state2action(sess,
+                                             batched_s_i1_vld,
+                                             batched_s_i2_vld,
+                                             model_s_i1_vld,
+                                             model_s_i2_vld)
+
+                metrics_vld = calc_metrics(sna_ed_sa_vld, args.blocklen)
+                deviation_logger_vld.add_log(
+                        batch_index=[b]*len(sna_ed_sa_vld.s_i1_src),
+                        dev_cgk=metrics_vld.d_H_cgk, #dev_de_d_cgk,
+                        dev_nn=metrics_vld.d_H_nn, #dev_de_d_nn,
+                        s_i_type=sna_ed_sa_vld.s_i_type)
+
+                deviation_logger_vld.close()
+                deviation_logger_vld.plot()
+                pdb.set_trace()
+
+    return
+
 
 '''
 show in terminal hist of dev_de_d_cgk and dev_de_d_nn
