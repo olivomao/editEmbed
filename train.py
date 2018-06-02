@@ -1681,17 +1681,7 @@ def load_pretrained_seq2seq(sess,
     #ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
     ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K_TryNewModel/train/seq2seq_BiLSTM_Attention_tune_blocklen_embed_size/blocklen_5_embed_size_100/ckpt_step_2000_loss_4.18251'
         
-    from tensorflow.python.tools.inspect_checkpoint \
-            import print_tensors_in_checkpoint_file
-
-    print_tensors_in_checkpoint_file(\
-            file_name=ckpt, \
-            tensor_name='', \
-            all_tensors=False, \
-            all_tensor_names=True)
-
-    saver.restore(sess, ckpt)
-    print('%s loaded'%ckpt)
+    load_pretrained_ckpt(ckpt, sess, saver)
     return
 
 '''
@@ -1772,7 +1762,7 @@ def pretrain_siamese_seq2seq(sess,
                 'train_avg_hamming_loss':[],
                 'train_avg_predicted_len':[],
                 'train_avg_ref_len':[]}
-        for ep in range(args.n_epoch):
+        for ep in range(args.n_epoch_pretrain):
             for b in range(args.n_clusters/args.batch_size):
                 #pdb.set_trace()
                 i_batch += 1
@@ -1891,6 +1881,49 @@ def pretrain_siamese_seq2seq(sess,
     return
 
 '''
+check if model_dir/ckpt... exists
+if so, return the latest one
+otherwise, return None
+'''
+def find_ckpt(model_dir):
+    from batch_test import select_ckpt
+    
+    ckpt, _, _ = select_ckpt(model_dir)
+
+    if ckpt == '': 
+        ckpt = None
+        print('Find no ckpt')
+    else:
+        print('Find ckpt: %s'%ckpt)
+
+    return ckpt
+
+'''
+load a pre-trained model specified by ckpt
+'''
+def load_pretrained_ckpt(ckpt, sess, saver):
+
+    from tensorflow.python.tools.inspect_checkpoint \
+            import print_tensors_in_checkpoint_file
+
+    print_tensors_in_checkpoint_file(\
+            file_name=ckpt, \
+            tensor_name='', \
+            all_tensors=False, \
+            all_tensor_names=True)
+
+    saver.restore(sess, ckpt)
+    print('%s loaded'%ckpt)
+
+    return
+
+
+
+
+
+    return
+
+'''
 modified to:
     - incorporate RL (e.g. REINFORCE or PGPE)
     - make blocks more modular
@@ -1976,31 +2009,10 @@ def train_siamese_seq2seq(param_dic):
 
     #========== check trainable variables
     check_variables('train siamese seq2seq - trainable variables') 
-    pdb.set_trace()
+    #pdb.set_trace()
 
-    #========== pre-training session
-    '''
-    if args.apply_pre_train == True:
-        pdb.set_trace()
-        pretrain_siamese_seq2seq(args,
-                                 model_pretrain,
-                                 model_pretrain_vld,
-                                 batched_x_cgkx,
-                                 batched_x_cgkx_vld)
-        pdb.set_trace()
-    '''
     #========== training session
     with tf.Session() as sess:
-
-        if args.apply_pre_train == True:
-            pdb.set_trace()
-            pretrain_siamese_seq2seq(sess,
-                                     args,
-                                     model_pretrain,
-                                     model_pretrain_vld,
-                                     batched_x_cgkx,
-                                     batched_x_cgkx_vld)
-            pdb.set_trace()
 
         ########## logger 
         deviation_logger = DevLogger(args.deviation_logger_path)
@@ -2009,12 +2021,35 @@ def train_siamese_seq2seq(param_dic):
         ########## saver
         saver = tf.train.Saver()
 
+        ckpt = find_ckpt(args.pretrain_model_dir)
+        if ckpt is not None and args.load_pre_train == 1:
+            print('Pretrained ckpt found. Ready to load...')
+            pdb.set_trace()
+            load_pretrained_ckpt(ckpt, sess, saver)
+            need_init_var = False
+            need_init_tab = True
+        elif args.apply_pre_train == True:
+            print('Either no pretrained ckpt found or no load. Ready to pretrain...')
+            pdb.set_trace()
+            pretrain_siamese_seq2seq(sess,
+                                     args,
+                                     model_pretrain,
+                                     model_pretrain_vld,
+                                     batched_x_cgkx,
+                                     batched_x_cgkx_vld)
+            need_init_var = False
+            need_init_tab = False
+        else:
+            need_init_var = True
+            need_init_tab = True
+            pass
+
+
         ########## initialization
-        if args.apply_pre_train == False:
-            pdb.set_trace()
+        if need_init_tab == True: #False indicates either ckpt loaded or init in pretrain
             sess.run(tf.tables_initializer())
+        if need_init_var == True:
             sess.run(tf.global_variables_initializer())
-            pdb.set_trace()
         
         #sess.run(tf.tables_initializer())
         sess.run(batched_s_i1.initializer)

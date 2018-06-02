@@ -2,6 +2,7 @@
 #for parameter combinations, use ';' to separate parameters (because for dist_tp_list, ',' also used)
 #used for seq2seq architecture
 #05.18: add en_bidirection/en_attention to support Model2 (also train/infer separated)
+#06.01: add pre-train option for siamese seq2seq
 
 #---------- location
 
@@ -9,9 +10,14 @@ root_dir                		data_sim_data_type_bin_siamese_seq2seq/
 #root_dir                               #data_sim_data_type_bin_seq2seq
 
 #data_label              		L50_TR10K_VLD2K #case_bin
-data_label				L50_TR20K_VLD4K_dependent_si_pairs
+#data_label				L50_TR20K_VLD4K_dependent_si_pairs
+data_label                              L50_TR20K_VLD4K_dependent_si_pairs_with_Pretrain
 
-model_label                             siamese_seq2seq_TryNewModel_RL_PGPE
+#model_label                             siamese_seq2seq_TryNewModel_pretrain_smallWeights
+
+model_label                              siamese_seq2seq_TryNewModel_pretrain_testLoad
+#model_label                             siamese_seq2seq_TryNewModel_pretrain
+#model_label                             siamese_seq2seq_TryNewModel_RL_PGPE
 #model_label				siamese_seq2seq_TryNewModel #BiLSTM/Attention supported; also train/infer separated
 #model_label                             siamese_seq2seq_LSTM
 #model_label             		seq2seq_LSTM #init
@@ -23,7 +29,7 @@ architecture				2	#0: siamese (enc) and 1: seq2seq and 2: siamese seq2seq
 
 #---------- data (clusters)
 
-n_clusters				5000   #test: 2000
+n_clusters				10000   #test: 2000
 cluster_len				50
 
 seq2seq_type				0	#0: cgk
@@ -49,6 +55,23 @@ n_clusters_validation                   2000    #if -1 or not training (e.g. tes
 allow_soft_placement			True
 log_device_placement			True
 
+#---------- pre-train
+#if pretrain ckpt exists
+#   - load_pre_train, apply_pre_train:
+#     1               0 or 1            ==> load pre trained ckpt
+#     0               1                 ==> clear ckpts, redo pre-train
+#     0               0                 ==> do nothing
+#if no pretrain ckpt
+#   - load_pre_train, apply_pre_train:
+#     0 or 1          1                 ==> do pre-train
+#     0 or 1          0                 ==> do nothing
+
+apply_pre_train                         1 #if 1, do pre-train if no ckpt found or no load_pre_train
+
+load_pre_train                          0 #if 1, load pre-trained model when it exists
+
+n_epoch_pretrain                        1 #used for pretrain
+
 #---------- train
 
 learning_rate				0.001
@@ -57,14 +80,14 @@ grad_max				5.0     #grad clipping
 output_buffer_size		        200000  #about batch_size * 1000
 random_seed				0	
 
-n_epoch                                 5
+n_epoch                                 10       #50
 batch_size				100     #10000
 n_batches                               500     #n_epoch * train_samples / batch_size; currently dummy
 
 #---------- neural network model (input)
 
 blocklen                                5 #1
-embed_size				100
+embed_size                              100				
 
 #---------- neural network model (encoder)
 
@@ -84,4 +107,6 @@ dec_forget_bias				0.5
 
 #---------- Reinforcement Setup
 
-RL_method                               
+RL_method                               0 #0 - disable/simply load or rand init model params; 1 - REINFORCE and 2 - PGPE
+init_model_option                       1 #0 - load a pre-trained model; 1 - preload + rand init model params
+beta                                    0.001 #learning rate for PGPE gradient ascent

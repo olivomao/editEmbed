@@ -5,6 +5,16 @@
 
 2018.06.02
 
+summary: support loading pretrained model
+
+test_configs/siamese_seq2seq/test_config_siamese_seq2seq_bin.txt
+- add pretrain flags
+
+train.py
+- add load pretrained ckpt related logic
+
+2018.06.02
+
 summary: add support codes for pretrain inside siamese seq2seq training
 
 batch_test.py
