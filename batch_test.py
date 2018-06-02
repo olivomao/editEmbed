@@ -225,6 +225,16 @@ def batch_test_train_1job_siamese_seq2seq(input_args):
     param_dic['deviation_logger_path'] = '%s/deviation_log.txt'%model_dir  
     param_dic['deviation_logger_vld_path'] = '%s/deviation_log_vld.txt'%model_dir
 
+    if int(param_dic['apply_pre_train'])==1:
+        param_dic['pretrain_model_dir'] = os.path.join(\
+                model_dir, "pretrain")
+
+        seq2seq_pair = '%s/pretrain/seq2seq_cgk.txt'%data_dir
+        param_dic['pretrain_seq2seq'] = seq2seq_pair
+
+        if param_dic['n_clusters_validation']>0:
+            param_dic['pretrain_seq2seq_vld'] = '%s/pretrain/seq2seq_cgk_validation.txt'%data_dir
+
     train_siamese_seq2seq(param_dic) 
 
     logPrint(logLabel+'End')
@@ -609,7 +619,45 @@ def batch_test_data(args):
 
     logPrint('%s End'%(logLabel))
     #
+    if int(param_dic['apply_pre_train'])==1:
+        siamese_seq2seq_data_pretrain(param_dic,
+                                      args,
+                                      data_dir)
     
+    return
+
+'''
+add data for seq2seq pre-training before siamese_seq2seq training
+'''
+def siamese_seq2seq_data_pretrain(param_dic,
+                                  args,
+                                  data_dir):
+    logPrint('siamese_seq2seq_data_pretrain')
+
+    seq2seq_pair = '%s/pretrain/seq2seq_cgk.txt'%data_dir
+
+    #seq2seq_cgk of seq2seq architecture
+    cmd = 'python simulate_data.py gen_seq2seq '+\
+                    '--output %s '%seq2seq_pair+\
+                    '--seq_type %s '%param_dic['seq_type']+\
+                    '--seq2seq_type %s '%param_dic['seq2seq_type']+\
+                    '--num %s '%param_dic['n_clusters']+\
+                    '--length %s '%param_dic['cluster_len']
+    #pdb.set_trace()
+    run_cmd(cmd)
+
+    if args.purpose=='train' and param_dic['n_clusters_validation']>0:
+        #generate validation data
+        seq2seq_pair_validation = '%s/pretrain/seq2seq_cgk_validation.txt'%data_dir
+        cmd = 'python simulate_data.py gen_seq2seq '+\
+                        '--output %s '%seq2seq_pair_validation+\
+                        '--seq_type %s '%param_dic['seq_type']+\
+                        '--seq2seq_type %s '%param_dic['seq2seq_type']+\
+                        '--num %s '%param_dic['n_clusters_validation']+\
+                        '--length %s '%param_dic['cluster_len']
+        #pdb.set_trace()
+        run_cmd(cmd)
+
     return
 
 '''
@@ -627,7 +675,7 @@ if __name__ == "__main__":
         s_parser.add_argument('--purpose', type=str, help='train or eval; or validation (same location as train)')
         s_parser.add_argument('--tasks', type=str, help='tp1[,tp2...]; tp=0 cluster 1 sample 2 dist (for train purpose)'+\
                                                                       'tp=3 seq2seq (cgk etc to be configured)'+\
-                                                                      'tp=4 siamese_seq2seq; order does not matter')
+                                                                      'tp=4 siamese_seq2seq (may also include pretrain seq2seq data if apply_pre_train is set); order does not matter')
         s_parser.add_argument('--N', type=int, default=1, help='number of processes to use; default 1')
 
         args = parser.parse_args()

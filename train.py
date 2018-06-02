@@ -1376,7 +1376,11 @@ def prepare_siamese_seq2seq_models(args,
                                    batched_s_i1,
                                    batched_s_i2,
                                    batched_s_i1_vld,
-                                   batched_s_i2_vld):
+                                   batched_s_i2_vld,
+                                   pretrain=False,
+                                   batched_x_cgkx=None,     #for pretrain
+                                   batched_x_cgkx_vld=None, #for pretrain (vld)
+                                   ):
 
     #========== build model/ computational graph for siamese architecture
     model_s_i1 = None
@@ -1384,8 +1388,23 @@ def prepare_siamese_seq2seq_models(args,
     model_s_i1_vld = None
     model_s_i2_vld = None
 
+    #if pretrain == True:
+    model_pretrain = None
+    model_pretrain_vld = None
+
     with tf.variable_scope('', reuse=tf.AUTO_REUSE) as scope:#scope set as '' to be consistent with ckpt loading
         
+        if pretrain == True:
+            model_pretrain = Model2(args,
+                                  batched_x_cgkx,
+                                  purpose="train",
+                                  model_name="pretrain_model")
+
+            model_pretrain_vld = Model2(args,
+                                      batched_x_cgkx_vld,
+                                      purpose="infer",
+                                      model_name="pretrain_model_vld")
+
         model_s_i1 = Model2(args, 
                             batched_s_i1,
                             purpose="infer",
@@ -1404,7 +1423,8 @@ def prepare_siamese_seq2seq_models(args,
                                 purpose="infer",
                                 model_name='model_s_i2_vld') #model_s_i2_vld.logits and .sample_id will be used (for validation)
 
-    return model_s_i1, model_s_i2, model_s_i1_vld, model_s_i2_vld
+    return model_s_i1, model_s_i2, model_s_i1_vld, model_s_i2_vld,\
+           model_pretrain, model_pretrain_vld
 
 def prepare_tf_dataset_input_files(siamese_seq2seq, #input data for training
                                    model_dir_path,
@@ -1451,6 +1471,52 @@ def prepare_tf_dataset_input_files(siamese_seq2seq, #input data for training
              deviation_de_d_cgk_path=deviation_de_d_cgk_path,
              s_i_type_path=s_i_type_path,
             ) 
+
+'''
+the model dir is .../pretrain/ (see storage structure
+for siamese seq2seq w/ pretrain)
+'''
+def prepare_tf_dataset_input_files_pretrain(\
+        seq2seq_pair_path, #input data for training
+        model_dir_path, #loc ** w/ 'pretrain' **
+        seq_type,
+        blocklen,
+        isValidationData=False):
+
+    if isValidationData==False:
+        vs = '' #empty validation str
+    else:
+        vs = '_validation' #this naming is specified in storage_structure.txt
+
+    run_cmd('mkdir -p %s'%os.path.join(model_dir_path, 'data_processed'))
+
+    vocab_path = os.path.join(\
+                model_dir_path, 'data_processed', 'vocab.txt')
+    prepare_vocab(vocab_path, seq_type, blocklen)
+
+    s_i1_path =  os.path.join(model_dir_path, 
+                              'data_processed',
+                              's_i1%s.seq2ids'%vs)
+    s_i2_path =  os.path.join(model_dir_path, 
+                              'data_processed',
+                              's_i2%s.seq2ids'%vs)
+
+    s_i1_path,\
+    s_i2_path = prepare_data_seq2seq(\
+                         seq2seq_pair_path,
+                         seq_type,
+                         blocklen,
+                         s_i1_path,
+                         s_i2_path)
+    return TfDatasetInputFiles(
+             vocab_path=vocab_path, #for both training and validation batches
+             s_i1_path=s_i1_path,   #x
+             s_i2_path=s_i2_path,   #cgk(x)
+             de_si_path=None,                #dummy for pretrain 
+             deviation_de_d_cgk_path=None,   #''
+             s_i_type_path=None,             #''
+            ) 
+
 
 '''
 update==False:
@@ -1629,6 +1695,202 @@ def load_pretrained_seq2seq(sess,
     return
 
 '''
+similar as training procedure in train_seq2seq
+serves as pretrained step for siamese seq2seq
+'''
+def pretrain_siamese_seq2seq(sess,
+                             args,
+                             model_pretrain,
+                             model_pretrain_vld,
+                             batched_x_cgkx,
+                             batched_x_cgkx_vld):
+
+    with tf.name_scope("pretrain_ops"):
+
+        #========== optimizer/ gradients operation
+        global_step = tf.Variable(0,
+                                  name="pretrain_global_step",
+                                  trainable=False)
+
+        optimizer = tf.train.AdamOptimizer(args.learning_rate,
+                                  name="pretrain_optimizer")
+
+        grads_and_vars =\
+                optimizer.compute_gradients(model_pretrain.loss)
+
+        capped_gvs = []
+        for grad, var in grads_and_vars:
+            if grad is not None:
+                #capped_gvs.append((tf.clip_by_value(grad, -1., 1.), var))
+                capped_gvs.append((tf.clip_by_norm(grad, args.grad_max), var))
+            else:
+                capped_gvs.append((grad, var))
+
+        tr_op_set = optimizer.apply_gradients(capped_gvs,
+                                              global_step=global_step)
+
+
+    model_dir = args.pretrain_model_dir
+    batched_input = batched_x_cgkx
+    batched_input_infer = batched_x_cgkx_vld
+    model_train = model_pretrain 
+    model_infer = model_pretrain_vld
+
+    #copied from train_seq2seq
+    #========== session run
+    if True: #with tf.Session() as sess:
+
+        #logging
+        saver = tf.train.Saver()
+        logPath = model_dir+'/log.txt'
+        logFigPath = model_dir+'/log.png' 
+        #'''
+        logFile = open(logPath, 'w');
+
+        logHeader = '#i\t'+\
+                    'train_avg_crosent_loss\t'+\
+                    'train_avg_hamming_loss\t'+\
+                    'train_avg_predicted_len\t'+\
+                    'train_avg_ref_len\t'+\
+                    'validation_hamming_loss\t'+\
+                    'validation_predicted_len\t'+\
+                    'validation_ref_len\n'
+        print(logHeader)
+        logFile.write(logHeader)
+
+        #actual train
+        sess.run(tf.tables_initializer())
+        sess.run(batched_input.initializer)
+        sess.run(batched_input_infer.initializer)
+        sess.run(tf.global_variables_initializer())
+
+        #
+        i_batch = 0
+        period_to_dump_log = 5
+        period_to_save_model = 100
+        stat = {'train_avg_crosent_loss':[],
+                'train_avg_hamming_loss':[],
+                'train_avg_predicted_len':[],
+                'train_avg_ref_len':[]}
+        for ep in range(args.n_epoch):
+            for b in range(args.n_clusters/args.batch_size):
+                #pdb.set_trace()
+                i_batch += 1
+                #print('ep=%d,batch=%d'%(ep,b))
+                
+                #train data
+                #_, batch_step, batch_loss,\
+                #train_logits, train_tgt_output = \
+                #    sess.run([tr_op_set, global_step, model.loss,
+                #              model.logits,
+                #              batched_input.target_output])
+                _,\
+                batch_step,\
+                batch_loss,\
+                train_logits,\
+                train_tgt_output = \
+                    sess.run([tr_op_set,
+                              global_step, 
+                              model_train.loss,
+                              model_train.logits,
+                              batched_input.target_output])
+
+                train_ids = logits2ids(train_logits)
+
+                #pdb.set_trace()
+                _,\
+                train_hamming_loss,\
+                train_predicted_len,\
+                train_ref_len = \
+                    calc_validation_loss(train_ids,
+                                         train_tgt_output,
+                                         blocklen=args.blocklen)
+                
+                if np.isnan(batch_loss):
+                    print('batch_loss (train crosent loss) nan')
+                    logFile.close()
+                    return
+
+                stat['train_avg_crosent_loss'].append(batch_loss)
+                stat['train_avg_hamming_loss'].append(train_hamming_loss)
+                stat['train_avg_predicted_len'].append(train_predicted_len)
+                stat['train_avg_ref_len'].append(train_ref_len)
+
+                #validation/test data
+                #if i_batch>50: pdb.set_trace()
+                if i_batch % period_to_dump_log == 0:
+                    #pdb.set_trace()
+                    #infer_ids, infer_tgt_output = \
+                    #    sess.run([model.sample_id_infer, \
+                    #              batched_input_infer.target_output])
+                    infer_ids, \
+                    infer_tgt_output = \
+                        sess.run([model_infer.sample_id, \
+                                  batched_input_infer.target_output])
+            
+
+                    _,\
+                    validation_hamming_loss,\
+                    validation_predicted_length, \
+                    validation_ref_length = \
+                        calc_validation_loss(infer_ids, 
+                                             infer_tgt_output,
+                                             blocklen=args.blocklen)
+
+                    if np.isnan(validation_hamming_loss):
+                        print('validation hamming loss nan')
+                        logFile.close()
+                        return
+
+                    logMsg = ""
+                    logMsg += "%d\t"%i_batch
+                    #train - cross entropy loss
+                    logMsg += "%f\t"%np.mean(stat['train_avg_crosent_loss'])
+                    #train - hamming loss
+                    logMsg += "%f\t"%np.mean(stat['train_avg_hamming_loss'])
+                    logMsg += "%f\t"%np.mean(stat['train_avg_predicted_len'])
+                    logMsg += "%f\t"%np.mean(stat['train_avg_ref_len'])
+                    for k in stat.keys():
+                        stat[k]=[]
+
+                    logMsg += "%f\t"%validation_hamming_loss
+                    logMsg += "%f\t"%validation_predicted_length
+                    logMsg += "%f\t"%validation_ref_length
+                    print('ep=%d b=%d %s'%(ep, b, logMsg))
+
+                    logFile.write(logMsg+'\n')
+
+                if i_batch % period_to_save_model == 0:
+                    try:
+                        print("save model")
+                        saver.save(sess, \
+                            model_dir+\
+                            '/ckpt_step_%d_loss_%s'%(i_batch,
+                            str(batch_loss)))
+                        print(logHeader)
+                    except:
+                        print("saver.save exception")
+                        if logFile.closed==False: logFile.close()
+                        return
+
+        #pdb.set_trace()
+        if logFile.closed==False: logFile.close()
+        #pdb.set_trace()
+        #'''
+        plot_log2(logPath, logFigPath,[['train_avg_crosent_loss',
+                                        'train_avg_hamming_loss',
+                                        'validation_hamming_loss'],
+                                       ['train_avg_predicted_len',
+                                        'train_avg_ref_len'],
+                                       ['validation_predicted_len',
+                                        'validation_ref_len']]) 
+        print('TRAIN FINISH'); #pdb.set_trace()
+ 
+
+
+    return
+
+'''
 modified to:
     - incorporate RL (e.g. REINFORCE or PGPE)
     - make blocks more modular
@@ -1641,6 +1903,23 @@ def train_siamese_seq2seq(param_dic):
     args = Namespace(**param_dic)
 
     #==========process data for tf data pipeline
+    if args.apply_pre_train == True:
+
+        ipt_files_pretrain = prepare_tf_dataset_input_files_pretrain(\
+                args.pretrain_seq2seq,   #input data for training
+                args.pretrain_model_dir, #loc ** w/ 'pretrain' **
+                args.seq_type,
+                args.blocklen,
+                isValidationData=False)
+
+        ipt_files_vld_pretrain = \
+            prepare_tf_dataset_input_files_pretrain(\
+                args.pretrain_seq2seq_vld,   #input data for training
+                args.pretrain_model_dir,     #loc ** w/ 'pretrain' **
+                args.seq_type,
+                args.blocklen,
+                isValidationData=True)
+
     ipt_files = prepare_tf_dataset_input_files(
                                    args.siamese_seq2seq, #input data for training
                                    args.model_dir_path,
@@ -1660,6 +1939,23 @@ def train_siamese_seq2seq(param_dic):
     #pdb.set_trace()
     #========== prepare batched/shuffled data via tf.dataset
     #pdb.set_trace()
+    if args.apply_pre_train == True:
+        batched_x_cgkx = prepare_minibatch_seq2seq(\
+                           ipt_files_pretrain.s_i1_path, #x
+                           ipt_files_pretrain.s_i2_path, #cgk(x)
+                           ipt_files_pretrain.vocab_path,
+                           args,
+                           "train")
+        batched_x_cgkx_vld = prepare_minibatch_seq2seq(\
+                           ipt_files_vld_pretrain.s_i1_path, #x
+                           ipt_files_vld_pretrain.s_i2_path, #cgk(x)
+                           ipt_files_vld_pretrain.vocab_path,
+                           args,
+                           "infer")
+    else:
+        batched_x_cgkx = None
+        batched_x_cgkx_vld = None
+
     batched_s_i1, \
     batched_s_i2 = prepare_minibatch_siamese_seq2seq(ipt_files, args, "train")
 
@@ -1667,19 +1963,44 @@ def train_siamese_seq2seq(param_dic):
     batched_s_i2_vld = prepare_minibatch_siamese_seq2seq(ipt_files_vld, args, "infer")
 
     model_s_i1, model_s_i2,\
-    model_s_i1_vld, model_s_i2_vld = \
+    model_s_i1_vld, model_s_i2_vld,\
+    model_pretrain, model_pretrain_vld= \
     prepare_siamese_seq2seq_models(args,
                                    batched_s_i1,
                                    batched_s_i2,
                                    batched_s_i1_vld,
-                                   batched_s_i2_vld)
+                                   batched_s_i2_vld,
+                                   pretrain=args.apply_pre_train,
+                                   batched_x_cgkx=batched_x_cgkx,
+                                   batched_x_cgkx_vld=batched_x_cgkx_vld)
 
     #========== check trainable variables
     check_variables('train siamese seq2seq - trainable variables') 
-    #pdb.set_trace()
+    pdb.set_trace()
 
+    #========== pre-training session
+    '''
+    if args.apply_pre_train == True:
+        pdb.set_trace()
+        pretrain_siamese_seq2seq(args,
+                                 model_pretrain,
+                                 model_pretrain_vld,
+                                 batched_x_cgkx,
+                                 batched_x_cgkx_vld)
+        pdb.set_trace()
+    '''
     #========== training session
     with tf.Session() as sess:
+
+        if args.apply_pre_train == True:
+            pdb.set_trace()
+            pretrain_siamese_seq2seq(sess,
+                                     args,
+                                     model_pretrain,
+                                     model_pretrain_vld,
+                                     batched_x_cgkx,
+                                     batched_x_cgkx_vld)
+            pdb.set_trace()
 
         ########## logger 
         deviation_logger = DevLogger(args.deviation_logger_path)
@@ -1689,18 +2010,26 @@ def train_siamese_seq2seq(param_dic):
         saver = tf.train.Saver()
 
         ########## initialization
-        sess.run(tf.tables_initializer())
+        if args.apply_pre_train == False:
+            pdb.set_trace()
+            sess.run(tf.tables_initializer())
+            sess.run(tf.global_variables_initializer())
+            pdb.set_trace()
+        
+        #sess.run(tf.tables_initializer())
         sess.run(batched_s_i1.initializer)
         sess.run(batched_s_i2.initializer)
         sess.run(batched_s_i1_vld.initializer)
         sess.run(batched_s_i2_vld.initializer)
-        sess.run(tf.global_variables_initializer())
 
         #if RL_method==2(PGPE) and init_model_option==1(pre-load+rand init)
         #    vs_dic is {theta(t):[u(t), sigma(t)]}
         #otherwise,
         #    vs_dic is None
-        vs_dic = model_initialization(args.RL_method,
+        if args.apply_pre_train == True:
+            vs_dic = None
+        else:
+            vs_dic = model_initialization(args.RL_method,
                              args.init_model_option,
                              sess,
                              saver)
@@ -1754,17 +2083,17 @@ def train_siamese_seq2seq(param_dic):
                                                beta,
                                                update) 
 
-                #deviation_logger.add_log(
-                #        batch_index=[b]*len(sna_ed_sa.s_i1_src),
-                #        dev_cgk=metrics.d_H_cgk, #dev_de_d_cgk,
-                #        dev_nn=metrics.d_H_nn, #dev_de_d_nn,
-                #        s_i_type=sna_ed_sa.s_i_type)
+                deviation_logger.add_log(
+                        batch_index=[b]*len(sna_ed_sa.s_i1_src),
+                        dev_cgk=metrics.d_H_cgk, #dev_de_d_cgk,
+                        dev_nn=metrics.d_H_nn, #dev_de_d_nn,
+                        s_i_type=sna_ed_sa.s_i_type)
 
-            #print('plot dH distribution for 1-epoch train data')
-            #deviation_logger.close() #do for one epoch
-            #deviation_logger.plot()
+            print('plot dH distribution for 1-epoch train data')
+            deviation_logger.close() #do for one epoch
+            deviation_logger.plot()
 
-            if False: #check validation
+            if True: #check validation
                 print('plot dH distribution for all validation data')
                 sna_ed_sa_vld = state2action(sess,
                                              batched_s_i1_vld,

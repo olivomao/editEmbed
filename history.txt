@@ -3,6 +3,22 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.06.02
+
+summary: add support codes for pretrain inside siamese seq2seq training
+
+batch_test.py
+- for siamese seq2seq training, add pretrain related params
+- for siamese seq2seq data, add pretrain related generation (siamese_seq2seq_data_pretrain)
+
+storage_structure.txt
+- add pretrain related data locations for siamese seq2seq
+
+train.py
+- add support of pretrain for siamese seq2seq training
+  -- esp there're two functions mainly implemented: prepare_tf_dataset_input_files_pretrain and pretrain_siamese_seq2seq
+  -- pretrain related codes appear where the apply_pre_train shows up 
+
 2018.05.18
 
 summary: support deviation_logger for train and validation. wrapup some functions for reuse and RL purpose in train_siamese_seq2seq
