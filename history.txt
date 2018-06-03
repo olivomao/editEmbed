@@ -3,6 +3,27 @@
 #
 # debug tip: fix rand seed ==> check np.isnan(loss) ==> before this iteration, enable tfdbg and check tensors w/ inf or nan
 
+2018.06.03
+
+summary: add pgpe class and into siamese seq2seq train, dump vld log png per epoch
+
+pgpe.py
+- add method 1 on top of method 0 (e.g. baseline)
+- add debug code (at grad) to check meta param sigma before/after update (if neg val appears)
+- update return baseline and related reward str, for logging purpose 
+
+test_configs/siamese_seq2seq/test_config_siamese_seq2seq_bin.txt
+- add init_sigma_range flag
+
+train.py
+- for train of siamese seq2seq
+  -- incorporate pgpe class
+  -- add dump_rwd and tf.summary codes to be checked via tensorboard
+  -- vld log png is drawn per epoch (also reflected in storage_structure.txt)
+
+storage_structure.txt
+- vld log png for siamese seq2seq can be generated per epoch
+
 2018.06.02
 
 summary: support loading pretrained model

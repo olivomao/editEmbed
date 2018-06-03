@@ -41,8 +41,8 @@
                        |                   |                      |              /de_si_validation.txt, deviation_de_d_cgk_validation.txt
                        |                   |                      /deviation_log.txt     (for train data)
                        |                   |                      /deviation_log.txt.png
-                       |                   |                      /deviation_log_vld.txt (for validation data)
-                       |                   |                      /deviation_log_vld.txt.png
+                       |                   |                      /deviation_log_vld.txt[.epoch(x)] (for validation data)
+                       |                   |                      /deviation_log_vld.txt[.epoch(x)].png
                        |                   |                      /
                        |                   |                      /(for siamese seq2seq pre-train)
                        |                   |                      /pretrain/ckpt_1

@@ -20,6 +20,7 @@ from util import logPrint, convert_str_to_bool_int_float
 from model_enc_dec import Model
 from model_enc_dec_2 import Model2
 from logger import DevLogger
+from pgpe import BasePGPE
 
 '''
 
@@ -1517,173 +1518,6 @@ def prepare_tf_dataset_input_files_pretrain(\
              s_i_type_path=None,             #''
             ) 
 
-
-'''
-update==False:
-    augment acc_avg_r_per_batch
-
-update==True:
-    take mean of acc_avg_r_per_batch,
-    update u_i, s_i and model param theta_i in vs_dic
-    
-    reset acc_avg_r_per_batch
-
-- acc_avg_r_per_batch: list of avg_r_per_batch across different batches
-- beta: learning rate to update u_i, s_i and thus theta_i (i is index for variables)
-
-return vs_dic and acc_avg_r_per_batch
-'''
-def PGPE_update_theta(vs_dic, 
-                      sna_ed_sa, 
-                      metrics, 
-                      acc_avg_r_per_batch,
-                      sess,
-                      beta,
-                      update=False):
-
-    #print('PGPE_update')
-
-    rewards = - np.abs(metrics.dev_de_d_nn) 
-    avg_reward_per_batch = np.mean(rewards)
-    
-    if update==False:
-        acc_avg_r_per_batch.append(avg_reward_per_batch)
-        return vs_dic, acc_avg_r_per_batch
-
-    else:
-        #pdb.set_trace()
-
-        acc_avg_r_per_batch.append(avg_reward_per_batch)
-        avg_r = np.mean(acc_avg_r_per_batch)
-        acc_avg_r_per_batch = []
-
-        for v_i in vs_dic.keys():
-            u = vs_dic[v_i]['u']
-            s = vs_dic[v_i]['s']
-
-            v = v_i.eval() 
-
-            d_u = (v - u)/np.square(s)
-            ## for numerical stability
-            nan_indice = np.isnan(d_u)
-            d_u[nan_indice] = 0.0
-            inf_indice = np.isinf(d_u)
-            d_u[inf_indice] = 0.0
-
-            D_u = avg_r * d_u
-            u = u + beta*D_u
-            vs_dic[v_i]['u']=u
-
-            d_s = (np.square(v-u)-np.square(s))/(s*np.square(s))
-            ## for numerical stability
-            nan_indice = np.isnan(d_s)
-            d_s[nan_indice] = 0.0
-            inf_indice = np.isinf(d_s)
-            d_s[inf_indice] = 0.0
-
-            D_s = avg_r * d_s
-            s = s + beta*D_s
-            #s = max(0,s) #? negative deviation issue
-            #s[s<0]=0
-            pdb.set_trace()
-            s = np.abs(s)
-            vs_dic[v_i]['s']=s
-
-            new_v = np.random.normal(loc=vs_dic[v_i]['u'], scale=vs_dic[v_i]['s'])
-            v_i.load(new_v, sess)
-        
-    #pdb.set_trace()
-
-    return vs_dic, acc_avg_r_per_batch
-
-
-'''
-rand init weights into the model
-'''
-def PGPE_rand_init(sess):
-
-    print('PGPE_rand_init')
-
-    vs_dic = {} #key: model trainable v, and val:{u:u_v, s:sigma_v}
-
-    #pdb.set_trace()
-
-    for v in tf.trainable_variables():
-        vs_dic[v] = {}
-        sp = v.eval().shape
-        #vs_dic[v]['u']=np.random.uniform(-1.0, 1.0, size=sp) #u_v, v is with shape (?,?)
-        vs_dic[v]['u']=v.eval()
-        vs_dic[v]['s']=np.random.uniform(0, 0.01, size=sp) #sigma_v
-        #for theta update purpose
-        #vs_dic[v]['acc_r']=0.0
-        #vs_dic[v]['acc_counter']=0
-
-        new_v = np.random.normal(loc=vs_dic[v]['u'], scale=vs_dic[v]['s'])
-        
-        '''
-        print(v)
-        print(v.eval())
-
-        print('u')
-        print(vs_dic[v]['u'])
-
-        print('s')
-        print(vs_dic[v]['s'])
-
-        print('new_v')
-        print(new_v)
-        '''
-
-        v.load(new_v, sess)
-        '''
-        print('v after loading new_v')
-        print(v.eval())
-        #pdb.set_trace()
-        '''
-    return vs_dic
-
-'''
-initialize the model depending on RL_method and init_model_option
-
-if RL_method==PGPE and init_model_option == 1,
-  vc_dic is returned with key=i-th Variable theta(i) ~ N(u(i), sigma(i))
-                          val=[u(i), sigma(i)] 
-'''
-def model_initialization(RL_method,
-                         init_model_option,
-                         sess,
-                         saver):
-
-    if RL_method == 0:#simply load or rand init a model
-        return None
-    elif RL_method == 1:#REINFORCE algo
-        return None
-    elif RL_method == 2:#PGPE algo
-        if init_model_option == 0:#load a pretrained model
-            #pdb.set_trace()
-            load_pretrained_seq2seq(sess, saver)
-            return None
-        elif init_model_option == 1:#pre-load thea, and rand initialization theta ~ N(u=preload theta, sigma ~ U[0, 0.001])
-            load_pretrained_seq2seq(sess, saver)
-            vs_dic = PGPE_rand_init(sess)
-            return vs_dic
-
-'''
-use saver to load a pretrained seq2seq model to sess
-
-the pretrained model and current sess model should be compatible
-'''
-def load_pretrained_seq2seq(sess,
-                            saver):
-
-    #loaded model needs to be consistentwith created model here
-
-    #ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K/train/seq2seq_LSTM/single_set/ckpt_step_500_loss_35.4505'
-    ckpt = '/data1/shunfu/editEmbed/data_sim_data_type_bin_seq2seq/L50_TR10K_VLD2K_TryNewModel/train/seq2seq_BiLSTM_Attention_tune_blocklen_embed_size/blocklen_5_embed_size_100/ckpt_step_2000_loss_4.18251'
-        
-    load_pretrained_ckpt(ckpt, sess, saver)
-    return
-
 '''
 similar as training procedure in train_seq2seq
 serves as pretrained step for siamese seq2seq
@@ -1917,12 +1751,6 @@ def load_pretrained_ckpt(ckpt, sess, saver):
 
     return
 
-
-
-
-
-    return
-
 '''
 modified to:
     - incorporate RL (e.g. REINFORCE or PGPE)
@@ -2007,6 +1835,13 @@ def train_siamese_seq2seq(param_dic):
                                    batched_x_cgkx=batched_x_cgkx,
                                    batched_x_cgkx_vld=batched_x_cgkx_vld)
 
+    #========== tf summary
+    dump_rwd = tf.get_variable(name='dump_rwd', shape=(), trainable=False) 
+    tf.summary.scalar('dump_rwd', dump_rwd)
+
+    merged = tf.summary.merge_all()
+    writer = tf.summary.FileWriter(args.model_dir_path)
+
     #========== check trainable variables
     check_variables('train siamese seq2seq - trainable variables') 
     #pdb.set_trace()
@@ -2016,7 +1851,7 @@ def train_siamese_seq2seq(param_dic):
 
         ########## logger 
         deviation_logger = DevLogger(args.deviation_logger_path)
-        deviation_logger_vld = DevLogger(args.deviation_logger_vld_path)
+        #deviation_logger_vld = DevLogger(args.deviation_logger_vld_path)
 
         ########## saver
         saver = tf.train.Saver()
@@ -2024,7 +1859,6 @@ def train_siamese_seq2seq(param_dic):
         ckpt = find_ckpt(args.pretrain_model_dir)
         if ckpt is not None and args.load_pre_train == 1:
             print('Pretrained ckpt found. Ready to load...')
-            pdb.set_trace()
             load_pretrained_ckpt(ckpt, sess, saver)
             need_init_var = False
             need_init_tab = True
@@ -2057,30 +1891,26 @@ def train_siamese_seq2seq(param_dic):
         sess.run(batched_s_i1_vld.initializer)
         sess.run(batched_s_i2_vld.initializer)
 
-        #if RL_method==2(PGPE) and init_model_option==1(pre-load+rand init)
-        #    vs_dic is {theta(t):[u(t), sigma(t)]}
-        #otherwise,
-        #    vs_dic is None
-        if args.apply_pre_train == True:
-            vs_dic = None
-        else:
-            vs_dic = model_initialization(args.RL_method,
-                             args.init_model_option,
-                             sess,
-                             saver)
-        pdb.set_trace()
-
         if args.RL_method==2: #PGPE
+            '''
+            vs = PGPE_rand_init(sess) 
             acc_avg_r_per_batch = []
             beta = args.beta
             PGPE_update_interval = 10 #number of batches after which to update policy
             b_cnt = 0
+            '''
+            pgpe_agent = BasePGPE(sess, 
+                                  N=10, 
+                                  learning_rate=args.beta,
+                                  init_sigma_range=args.init_sigma_range)
         #pdb.set_trace()
                  
         ########## iteration
+        global_b = 0
         for ep in range(args.n_epoch):
 
             for b in range(args.n_clusters/args.batch_size):
+                global_b += 1
 
                 #pdb.set_trace()
                 sna_ed_sa = state2action(sess,
@@ -2091,13 +1921,17 @@ def train_siamese_seq2seq(param_dic):
 
                 metrics = calc_metrics(sna_ed_sa, args.blocklen)
                 
+                '''
                 print('ep=%d b=%d mean dev cgk=%f, nn=%f'%(ep,b,
                        np.mean(metrics.dev_de_d_cgk),
                        np.mean(metrics.dev_de_d_nn)))
-                
+                '''
+
+                reward_str = ''
                 if args.RL_method==2: #PGPE
                     #pdb.set_trace()
 
+                    '''
                     b_cnt += 1
                     if b_cnt % PGPE_update_interval == 0:
                         update = True
@@ -2117,16 +1951,32 @@ def train_siamese_seq2seq(param_dic):
                                                sess,
                                                beta,
                                                update) 
+                    '''
+                    baseline_rewards, reward_str =\
+                            pgpe_agent.update(sess, metrics)
 
+                print('ep=%d b=%d mean dev cgk=%f, nn=%f, rwd=%s'%(ep,b,
+                       np.mean(metrics.dev_de_d_cgk),
+                       np.mean(metrics.dev_de_d_nn), 
+                       reward_str))
+               
+                summ, _ = sess.run([merged, dump_rwd],
+                        feed_dict={dump_rwd:baseline_rewards})
+                writer.add_summary(summ,global_b)
+
+                '''
                 deviation_logger.add_log(
                         batch_index=[b]*len(sna_ed_sa.s_i1_src),
                         dev_cgk=metrics.d_H_cgk, #dev_de_d_cgk,
                         dev_nn=metrics.d_H_nn, #dev_de_d_nn,
                         s_i_type=sna_ed_sa.s_i_type)
+                '''
 
+            '''
             print('plot dH distribution for 1-epoch train data')
             deviation_logger.close() #do for one epoch
             deviation_logger.plot()
+            '''
 
             if True: #check validation
                 print('plot dH distribution for all validation data')
@@ -2137,6 +1987,8 @@ def train_siamese_seq2seq(param_dic):
                                              model_s_i2_vld)
 
                 metrics_vld = calc_metrics(sna_ed_sa_vld, args.blocklen)
+                deviation_logger_vld = DevLogger(
+                        args.deviation_logger_vld_path+'.epoch%d'%ep)
                 deviation_logger_vld.add_log(
                         batch_index=[b]*len(sna_ed_sa_vld.s_i1_src),
                         dev_cgk=metrics_vld.d_H_cgk, #dev_de_d_cgk,
@@ -2145,7 +1997,7 @@ def train_siamese_seq2seq(param_dic):
 
                 deviation_logger_vld.close()
                 deviation_logger_vld.plot()
-                pdb.set_trace()
+                #pdb.set_trace()
 
     return
 

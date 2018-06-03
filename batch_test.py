@@ -404,8 +404,6 @@ note:
 '''
 def select_ckpt(model_dir):
 
-    pdb.set_trace()
-
     filenames = os.listdir(model_dir)
     '''
     example:

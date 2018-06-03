@@ -68,9 +68,9 @@ log_device_placement			True
 
 apply_pre_train                         1 #if 1, do pre-train if no ckpt found or no load_pre_train
 
-load_pre_train                          0 #if 1, load pre-trained model when it exists
+load_pre_train                          1 #if 1, load pre-trained model when it exists
 
-n_epoch_pretrain                        1 #used for pretrain
+n_epoch_pretrain                        5 #used for pretrain
 
 #---------- train
 
@@ -80,7 +80,7 @@ grad_max				5.0     #grad clipping
 output_buffer_size		        200000  #about batch_size * 1000
 random_seed				0	
 
-n_epoch                                 10       #50
+n_epoch                                 5       #50
 batch_size				100     #10000
 n_batches                               500     #n_epoch * train_samples / batch_size; currently dummy
 
@@ -107,6 +107,6 @@ dec_forget_bias				0.5
 
 #---------- Reinforcement Setup
 
-RL_method                               0 #0 - disable/simply load or rand init model params; 1 - REINFORCE and 2 - PGPE
-init_model_option                       1 #0 - load a pre-trained model; 1 - preload + rand init model params
-beta                                    0.001 #learning rate for PGPE gradient ascent
+RL_method                               2 #0 - disable/simply load or rand init model params; 1 - REINFORCE and 2 - PGPE
+init_sigma_range                        0.01
+beta                                    0.0005 #learning rate for PGPE gradient ascent

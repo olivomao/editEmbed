@@ -8,13 +8,20 @@ class BasePGPE(object):
                  sess,
                  N,             #update meta param \rho per N batches
                  learning_rate, #e.g. beta in config file
+                 init_sigma_range,
                  ):
         print('BasePGPE init')
 
+        #0 basic version; 
+        #1 with Algo1 basic version
+        #2 with Algo2 symmetric sampling
+        self.method = 1 
+        self.baseline = None
         self.vs = self.init_vs(sess) 
 
         self.N = N #update meta param \rho (=u and s in vs) per N batches
         self.learning_rate = learning_rate
+        self.init_sigma_range = init_sigma_range
 
         return
 
@@ -24,7 +31,10 @@ class BasePGPE(object):
     '''
     def calc_du(self, v, u, s):
 
-        d_u = (v - u)/np.square(s)
+        if self.method==0:
+            d_u = (v - u)/np.square(s)
+        elif self.method==1:
+            d_u = v - u
         ## for numerical stability
         nan_indice = np.isnan(d_u)
         d_u[nan_indice] = 0.0
@@ -35,7 +45,10 @@ class BasePGPE(object):
 
     def calc_ds(self, v, u, s):
 
-        d_s = (np.square(v-u)-np.square(s))/(s*np.square(s))
+        if self.method==0:
+            d_s = (np.square(v-u)-np.square(s))/(s*np.square(s))
+        elif self.method==1:
+            d_s = (np.square(v-u)-np.square(s))/s
         ## for numerical stability
         nan_indice = np.isnan(d_s)
         d_s[nan_indice] = 0.0
@@ -61,11 +74,25 @@ class BasePGPE(object):
         for n in xrange(1,len(r_list)):
             D_x += dx_list[n]*r_list[n]
 
+        if ge0 == True:
+            print('Before grad update, min=%f, max=%f'%(np.min(x), np.max(x)))
+
         x = x + self.learning_rate*D_x
-        x = 1.0/float(self.N)*x
+
+        if ge0 == True:
+            m = np.min(x)
+            M = np.max(x)
+            if m<0 or M<0:
+                flag_st = '*'
+                pdb.set_trace()
+            else:
+                flag_st = ''
+            print('After grad update, min=%f, max=%f learning_rate=%f %s'%(m, M, self.learning_rate, flag_st))
+
+        #x = 1.0/float(self.N)*x
         if ge0==True:
-            x[x<0]=0 #0.00001
-            #x = np.abs(x)
+            #x[x<0]=0 #0.00001
+            x = np.abs(x)
         return x
 
     '''
@@ -92,7 +119,7 @@ class BasePGPE(object):
             #update u, s
             u = v.eval() #from pre-trained model
             vs_dic[v]['u']=u
-            s = np.random.uniform(0, 0.001, size=sp) #sigma_v
+            s = np.random.uniform(0, self.init_sigma_range, size=sp) #sigma_v
             vs_dic[v]['s']=s
 
             #sample new_v
@@ -108,11 +135,25 @@ class BasePGPE(object):
 
         return vs_dic
 
+    '''
+    method==1 basic version
+
+    return baseline (rewards, could be None)
+    to see if policy update is working reasonably
+    '''
     def update(self, sess, metrics):
 
         #n-th batch rewards
         rewards = - np.abs(metrics.dev_de_d_nn)
         avg_rewards_per_batch = np.mean(rewards)
+
+        if self.baseline is None:
+            self.baseline = avg_rewards_per_batch
+        else:
+            self.baseline = 0.9*self.baseline + 0.1*avg_rewards_per_batch
+
+        if self.method==1:
+            avg_rewards_per_batch = avg_rewards_per_batch - self.baseline
 
         for v, cdic in self.vs.items():
 
@@ -120,15 +161,16 @@ class BasePGPE(object):
 
             if len(self.vs[v]['r'])==self.N: #update u,s using du,ds and r
                 print('PGPE update meta param...')
-                #pdb.set_trace()
                 u = cdic['u']
                 s = cdic['s']
 
                 du_list = cdic['du']
                 ds_list = cdic['ds']
                 r_list  = cdic['r']
+                print(v)
                 cdic['u'] = self.grad(u, du_list, r_list)
                 cdic['s'] = self.grad(s, ds_list, r_list, ge0=True)
+                print('')
                 
                 cdic['du']=[]
                 cdic['ds']=[]
@@ -146,6 +188,10 @@ class BasePGPE(object):
             cdic['du'].append(self.calc_du(new_v, u, s))
             cdic['ds'].append(self.calc_ds(new_v, u, s))
 
-        return
+        if self.baseline is None:
+            reward_str = ''
+        else:
+            reward_str = str(self.baseline)
+        return self.baseline, reward_str
 
 
